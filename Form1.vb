@@ -3,10 +3,10 @@ Imports System.Runtime.InteropServices
 
 Public Class Form1
 
-    ' --- SDK 상수 ---
+    ' SDK 상수
     Private Const BS_SDK_SUCCESS As Integer = 0
 
-    ' --- SDK 컨텍스트 ---
+    ' SDK 컨텍스트
     Private sdkContext As IntPtr = IntPtr.Zero
 
 #Region "SDK DllImport 선언"
@@ -54,8 +54,7 @@ Public Class Form1
     Public Shared Sub BS2_ReleaseObject(ByVal obj As IntPtr)
     End Sub
 
-    ' --- [신규] 5. ID로 장치 연결 ---
-    ' C++: int BS2_ConnectDevice(void* context, uint32_t deviceId);
+    ' --- 5. ID로 장치 연결 ---
     <DllImport("BS_SDK_V2.dll", CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function BS2_ConnectDevice(
         ByVal context As IntPtr,
@@ -64,10 +63,8 @@ Public Class Form1
     End Function
 #End Region
 
-
     Private Sub btnDLLLoad_Click(sender As Object, e As EventArgs) Handles btnDLLLoad.Click
 
-        ' 이미 초기화되었다면 중복 실행 방지
         If sdkContext <> IntPtr.Zero Then
             MessageBox.Show("SDK가 이미 초기화되었습니다.")
             Return
@@ -78,18 +75,13 @@ Public Class Form1
 
         If sdkContext <> IntPtr.Zero Then
             result = BS2_Initialize(sdkContext)
-
             If result = BS_SDK_SUCCESS Then
                 MessageBox.Show("DLL 초기화 성공!")
             Else
-                ' 초기화 실패 시 컨텍스트 즉시 해제
                 BS2_ReleaseContext(sdkContext)
                 sdkContext = IntPtr.Zero
                 MessageBox.Show("DLL 초기화 실패. 오류 코드: " & result)
             End If
-
-            ' (중요) 성공했을 때는 BS2_ReleaseContext()를 호출하면 안 됩니다.
-            ' 폼이 닫힐 때까지 컨텍스트를 유지해야 합니다.
         Else
             MessageBox.Show("컨텍스트 할당 실패 (메모리 부족?)")
         End If
@@ -103,7 +95,7 @@ Public Class Form1
             Return
         End If
 
-        Dim deviceAddress As String = "192.168.1.2"
+        Dim deviceAddress As String = "192.168.0.2"
         Dim devicePort As UShort = 51211
         Dim deviceId As UInteger = 0
         Dim result As Integer
@@ -128,18 +120,14 @@ Public Class Form1
         result = BS2_SearchDevices(sdkContext)
 
         If result = BS_SDK_SUCCESS Then
-            Dim deviceListObj As IntPtr = IntPtr.Zero ' 장치 ID 배열을 가리킬 포인터
-            Dim numDevice As UInteger = 0           ' 검색된 장치 수
+            Dim deviceListObj As IntPtr = IntPtr.Zero
+            Dim numDevice As UInteger = 0
 
             result = BS2_GetDevices(sdkContext, deviceListObj, numDevice)
 
             If result = BS_SDK_SUCCESS AndAlso numDevice > 0 Then
-                ' C++ 샘플(deviceListObj[0])처럼 첫 번째 장치를 선택합니다.
-                ' deviceListObj는 32비트(4바이트) ID 배열의 시작 주소입니다.
-                ' Marshal.ReadInt32로 포인터가 가리키는 첫 4바이트(첫 번째 ID)를 읽습니다.
                 Dim selectedDeviceId As UInteger = CType(Marshal.ReadInt32(deviceListObj), UInteger)
 
-                ' (중요) SDK가 할당해 준 deviceListObj 메모리를 해제합니다.
                 BS2_ReleaseObject(deviceListObj)
 
                 ' 첫 번째 장치에 연결 시도
