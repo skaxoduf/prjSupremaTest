@@ -54,8 +54,6 @@ Namespace Suprema
             Dim typeSrc = GetType(TSource)
             Dim typeOut = GetType(TOutput)
 
-            ' 1. ByRef로 넘어온 output을 Object로 박싱합니다.
-            '    (리플렉션 SetValue는 객체 참조에 대해서만 동작하기 때문)
             Dim boxedOutput As Object = output
 
             Dim srcInfos = typeSrc.GetFields(BindingFlags.Instance Or BindingFlags.Public Or BindingFlags.NonPublic)
@@ -65,19 +63,12 @@ Namespace Suprema
                 Dim matchs = outInfos.Where(Function(x) Equals(x.Name, srcInfo.Name) AndAlso x.FieldType Is srcInfo.FieldType)
 
                 For Each outInfo In matchs
-                    ' 2. GetValue를 사용해 src에서 값을 가져옵니다.
                     Dim valueToSet = srcInfo.GetValue(src)
-
-                    ' 3. SetValue를 사용해 '박싱된' output 객체에 값을 설정합니다.
-                    '    (trOut 대신 boxedOutput 사용)
                     outInfo.SetValue(boxedOutput, valueToSet)
-
                     Exit For
                 Next
             Next
 
-            ' 4. 모든 필드 값이 변경된 박싱된 객체를
-            '    원래 ByRef 변수인 output에 다시 언박싱하여 할당합니다.
             output = DirectCast(boxedOutput, TOutput)
 
         End Sub
