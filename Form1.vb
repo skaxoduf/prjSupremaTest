@@ -16,10 +16,8 @@ Public Class Form1
 
         Dim result As BS2ErrorCode
         sdkContext = BS2_AllocateContext()
-
         If sdkContext <> IntPtr.Zero Then
             result = CType(BS2_Initialize(sdkContext), BS2ErrorCode)
-
             If result = BS2ErrorCode.BS_SDK_SUCCESS Then
                 MessageBox.Show("DLL 초기화 성공!")
             Else
@@ -32,7 +30,6 @@ Public Class Form1
         End If
 
     End Sub
-
 
     Private Sub btnDeviceConn_Click(sender As Object, e As EventArgs) Handles btnDeviceConn.Click
 
@@ -76,7 +73,6 @@ Public Class Form1
 
     End Sub
 
-
     Private Sub btnDeviceSearchConn_Click(sender As Object, e As EventArgs) Handles btnDeviceSearchConn.Click
 
         'BioStar 애플리케이션과 장치는 server mode와 direct mode로 연결할 수 있습니다.
@@ -110,7 +106,7 @@ Public Class Form1
 
                 ' --- 찾은 장치 개수(numDevice)만큼 반복 ---
                 For idx As Integer = 0 To numDevice - 1
-                    ' 목록에서 idx 번째 장치의 ID를 읽어옵니다. (UInt32는 4바이트)
+                    ' 목록에서 idx 번째 장치의 ID를 읽어옵니다. 
                     Dim currentDeviceId As UInteger = Marshal.ReadInt32(deviceListObj, idx * 4)
 
                     ' 장치 ID로 상세 정보(이름, IP 등)를 가져옵니다.
