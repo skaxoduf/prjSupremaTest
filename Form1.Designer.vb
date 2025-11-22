@@ -43,6 +43,8 @@ Partial Class Form1
         rbLoadImage = New RadioButton()
         rbScanDevice = New RadioButton()
         btnTestImage = New Button()
+        btnRemoveUser = New Button()
+        btnUpdateFace = New Button()
         SuspendLayout()
         ' 
         ' btnDLLLoad
@@ -146,7 +148,7 @@ Partial Class Form1
         ' 
         btnEnrollUser.Location = New Point(25, 322)
         btnEnrollUser.Name = "btnEnrollUser"
-        btnEnrollUser.Size = New Size(177, 44)
+        btnEnrollUser.Size = New Size(130, 44)
         btnEnrollUser.TabIndex = 0
         btnEnrollUser.Text = "4. 사용자 등록"
         btnEnrollUser.UseVisualStyleBackColor = True
@@ -155,7 +157,7 @@ Partial Class Form1
         ' 
         txtMemNm.Location = New Point(71, 379)
         txtMemNm.Name = "txtMemNm"
-        txtMemNm.Size = New Size(93, 23)
+        txtMemNm.Size = New Size(63, 23)
         txtMemNm.TabIndex = 1
         txtMemNm.Text = "남태열"
         ' 
@@ -188,15 +190,16 @@ Partial Class Form1
         ' txtImagePath
         ' 
         txtImagePath.AllowDrop = True
-        txtImagePath.Location = New Point(79, 455)
+        txtImagePath.Location = New Point(79, 443)
+        txtImagePath.Multiline = True
         txtImagePath.Name = "txtImagePath"
-        txtImagePath.Size = New Size(291, 23)
+        txtImagePath.Size = New Size(291, 40)
         txtImagePath.TabIndex = 1
         ' 
         ' Label3
         ' 
         Label3.AutoSize = True
-        Label3.Location = New Point(25, 458)
+        Label3.Location = New Point(25, 443)
         Label3.Name = "Label3"
         Label3.Size = New Size(48, 15)
         Label3.TabIndex = 3
@@ -205,33 +208,51 @@ Partial Class Form1
         ' rbLoadImage
         ' 
         rbLoadImage.AutoSize = True
-        rbLoadImage.Location = New Point(25, 507)
+        rbLoadImage.Checked = True
+        rbLoadImage.Location = New Point(160, 336)
         rbLoadImage.Name = "rbLoadImage"
-        rbLoadImage.Size = New Size(112, 19)
+        rbLoadImage.Size = New Size(72, 19)
         rbLoadImage.TabIndex = 4
         rbLoadImage.TabStop = True
-        rbLoadImage.Text = "JPG 파일로 등록"
+        rbLoadImage.Text = "JPG 등록"
         rbLoadImage.UseVisualStyleBackColor = True
         ' 
         ' rbScanDevice
         ' 
         rbScanDevice.AutoSize = True
-        rbScanDevice.Location = New Point(165, 507)
+        rbScanDevice.Location = New Point(249, 336)
         rbScanDevice.Name = "rbScanDevice"
         rbScanDevice.Size = New Size(101, 19)
         rbScanDevice.TabIndex = 4
-        rbScanDevice.TabStop = True
         rbScanDevice.Text = "장비에서 촬영"
         rbScanDevice.UseVisualStyleBackColor = True
         ' 
         ' btnTestImage
         ' 
-        btnTestImage.Location = New Point(25, 554)
+        btnTestImage.Location = New Point(258, 404)
         btnTestImage.Name = "btnTestImage"
-        btnTestImage.Size = New Size(177, 44)
+        btnTestImage.Size = New Size(112, 35)
         btnTestImage.TabIndex = 0
         btnTestImage.Text = "jpg 유효성 테스트"
         btnTestImage.UseVisualStyleBackColor = True
+        ' 
+        ' btnRemoveUser
+        ' 
+        btnRemoveUser.Location = New Point(240, 502)
+        btnRemoveUser.Name = "btnRemoveUser"
+        btnRemoveUser.Size = New Size(130, 44)
+        btnRemoveUser.TabIndex = 0
+        btnRemoveUser.Text = "6. 사용자 삭제"
+        btnRemoveUser.UseVisualStyleBackColor = True
+        ' 
+        ' btnUpdateFace
+        ' 
+        btnUpdateFace.Location = New Point(25, 502)
+        btnUpdateFace.Name = "btnUpdateFace"
+        btnUpdateFace.Size = New Size(130, 44)
+        btnUpdateFace.TabIndex = 0
+        btnUpdateFace.Text = "5. 사용자 수정"
+        btnUpdateFace.UseVisualStyleBackColor = True
         ' 
         ' Form1
         ' 
@@ -257,6 +278,8 @@ Partial Class Form1
         Controls.Add(btnDeviceConn)
         Controls.Add(btnDLLUnLoad)
         Controls.Add(btnTestImage)
+        Controls.Add(btnUpdateFace)
+        Controls.Add(btnRemoveUser)
         Controls.Add(btnEnrollUser)
         Controls.Add(btnDLLLoad)
         Name = "Form1"
@@ -286,5 +309,7 @@ Partial Class Form1
     Friend WithEvents rbLoadImage As RadioButton
     Friend WithEvents rbScanDevice As RadioButton
     Friend WithEvents btnTestImage As Button
+    Friend WithEvents btnRemoveUser As Button
+    Friend WithEvents btnUpdateFace As Button
 
 End Class
