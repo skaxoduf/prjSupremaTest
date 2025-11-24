@@ -1,15 +1,19 @@
-﻿Imports System.Net
+﻿Imports System.IO
+Imports System.Net
 Imports System.Runtime.InteropServices
 Imports prjSupremaTest.Suprema
-Imports System.IO
+Imports prjSupremaTest.Suprema.API
 Imports Suprema
 Imports Suprema.API
 
 Public Class Form1
 
-    Private sdkContext As IntPtr = IntPtr.Zero
-    Private connectedDeviceId As UInteger = 0
-    '이 구조체는 오리지널 구조체가 복잡한 배열을 포함하고 있어 메모리 정렬 문제를 피하기 위해 단순화된 버전
+    Private sdkContext As IntPtr = IntPtr.Zero  ' SDK 컨텍스트 핸들
+    Private connectedDeviceId As UInteger = 0   ' 연결된 장치 ID
+    Private cbOnLogReceived As API.OnLogReceived = Nothing   ' 장비 이벤트 받는 콜백함수 선언
+
+
+    '이 구조체는 오리지널 구조체가 복잡한 배열을 포함하고 있어 메모리 정렬 문제를 피하기 위해 단순화된 버전 (기본적으로 사용안함)
     <StructLayout(LayoutKind.Sequential, Pack:=1)>
     Public Structure BS2FaceExWarped_Safe
         Public faceIndex As Byte
@@ -24,9 +28,6 @@ Public Class Form1
         Public imageData As Byte()
         <MarshalAs(UnmanagedType.ByValArray, SizeConst:=BS2Environment.BS2_MAX_WARPED_IR_IMAGE_LENGTH)>
         Public irImageData As Byte()
-
-        ' 복잡한 구조체 배열 대신 '단순 바이트 배열'로 선언하여 메모리 꼬임 방지
-        ' 크기 = 템플릿 개수(20) * 템플릿 사이즈(556: data 552 + isIR 1 + reserved 3) = 11120
         <MarshalAs(UnmanagedType.ByValArray, SizeConst:=11120)>
         Public templateExBlob As Byte()
     End Structure
@@ -57,7 +58,7 @@ Public Class Form1
             If ext = ".jpg" OrElse ext = ".jpeg" OrElse ext = ".png" Then
                 txtImagePath.Text = filePath
             Else
-                MessageBox.Show("이미지 파일(jpg, png)만 지원합니다.")
+                MessageBox.Show("이미지 확장자(jpg, png)만 가능!!!")
             End If
         End If
     End Sub
@@ -85,7 +86,6 @@ Public Class Form1
         Else
             MessageBox.Show("DLL 컨텍스트 할당 실패")
         End If
-
 
     End Sub
 
@@ -177,7 +177,7 @@ Public Class Form1
 
             If result = BS2ErrorCode.BS_SDK_SUCCESS AndAlso numDevice > 0 Then
 
-                MessageBox.Show($"총 {numDevice}대의 장치를 찾았습니다.")
+                MessageBox.Show($"총 {numDevice}대의 장치를 찾음!!")
 
                 ' --- 찾은 장치갯수만큼 루프돌면서 리스트박스에 추가 
                 For idx As Integer = 0 To numDevice - 1
@@ -307,26 +307,22 @@ Public Class Form1
             infoString.AppendLine($"Port: {deviceInfo.port}")
             infoString.AppendLine($"Max Users: {deviceInfo.maxNumOfUser}")
             infoString.AppendLine($"Fingerprint Supported: {Convert.ToBoolean(deviceInfo.fingerSupported)}")
-            infoString.AppendLine($"Face Supported: {Convert.ToBoolean(deviceInfo.faceSupported)}")
+            infoString.AppendLine($"Old Face Supported: {Convert.ToBoolean(deviceInfo.faceSupported)}")
             infoString.AppendLine($"Card Supported: {Convert.ToBoolean(deviceInfo.cardSupported)}")
             infoString.AppendLine($"PIN Supported: {Convert.ToBoolean(deviceInfo.pinSupported)}")
             infoString.AppendLine($"WLAN Supported: {Convert.ToBoolean(deviceInfo.wlanSupported)}")
 
 
-            ' ---------------------------------------------------------
-            ' 2. 상세 능력치 조회 (BS2_GetDeviceCapabilities) - 여기서 진짜 얼굴인식 지원 여부 확인
-            ' ---------------------------------------------------------
+            ' 신형장비 스펙 조회 (BS2_GetDeviceCapabilities) - 여기서 나오는 값이 진짜 얼굴인식 지원여부 값이다.
             Dim cap As New BS2DeviceCapabilities()
             Dim capResult As BS2ErrorCode = API.BS2_GetDeviceCapabilities(sdkContext, selectedDeviceId, cap)
 
             If capResult = BS2ErrorCode.BS_SDK_SUCCESS Then
-                infoString.AppendLine(vbCrLf & "=== [2] 신형 장비 상세 능력치 (Capabilities) ===")
+                infoString.AppendLine(vbCrLf & "=== 장비 상세 스펙2 ===")
 
-                ' FaceEx (Visual Face) 지원 여부 확인 비트 연산
-                ' SYSTEM_SUPPORT_FACEEX = 0x40 (64)
                 Dim isFaceExSupported As Boolean = (cap.systemSupported And BS2CapabilitySystemSupport.SYSTEM_SUPPORT_FACEEX) > 0
 
-                infoString.AppendLine($"Visual Face (FaceEx) Supported: {isFaceExSupported}")
+                infoString.AppendLine($"New Face Supported: {isFaceExSupported}")
                 infoString.AppendLine($"Max Users: {cap.maxUsers}")
                 infoString.AppendLine($"Max Faces: {cap.maxFaces}")
 
@@ -340,15 +336,11 @@ Public Class Form1
             Else
                 infoString.AppendLine("상세 능력치 조회 실패: " & capResult.ToString())
             End If
-
-
             txtDeviceInfo.Text = infoString.ToString
-
         Else
             txtDeviceInfo.Text = $"장치 정보 가져오기 실패. (ID: {selectedDeviceId})" & vbCrLf
             txtDeviceInfo.AppendText("오류 코드: 0x" & getInfoResult.ToString("X"))
         End If
-
 
     End Sub
 
@@ -433,12 +425,9 @@ Public Class Form1
     Private Sub btnEnrollUser_Click(sender As Object, e As EventArgs) Handles btnEnrollUser.Click
 
         ' 연결 상태 확인
-        If sdkContext = IntPtr.Zero OrElse connectedDeviceId = 0 Then
-            MessageBox.Show("장치에 먼저 연결해주세요.")
-            Return
-        End If
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
-        BS2_SetDefaultResponseTimeout(sdkContext, 10 * 1000)  ' 타임아우스 10초설정
+        BS2_SetDefaultResponseTimeout(sdkContext, 10 * 1000)  ' 타임아웃 10초설정
 
         ' 장치 정보 조회
         Dim deviceInfo As BS2SimpleDeviceInfo
@@ -496,7 +485,7 @@ Public Class Form1
                 Dim warpedImageBytes As Byte() = Nothing ' 정규화된 이미지를 받을 변수
 
                 ' 새로 만든 함수 호출
-                If GetFaceDataFromImage(imagePath, extractedTemplate, warpedImageBytes) Then
+                If GetFaceDataFromImage(sdkContext, connectedDeviceId, imagePath, extractedTemplate, warpedImageBytes) Then
                     userBlob.user.numFaces = 1
 
                     ' 표준 구조체
@@ -516,7 +505,7 @@ Public Class Form1
                     faceExWarped.imageData = New Byte(BS2_MAX_WARPED_IMAGE_LENGTH - 1) {}
                     Array.Copy(warpedImageBytes, faceExWarped.imageData, warpedImageBytes.Length)
 
-                    ' IR 데이터 초기화 (필수)
+                    ' IR 데이터 초기화
                     faceExWarped.irImageLen = 0
                     faceExWarped.irImageData = New Byte(BS2_MAX_WARPED_IR_IMAGE_LENGTH - 1) {}
 
@@ -533,49 +522,45 @@ Public Class Form1
                     Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
                     ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
 
-                    ' 구조체를 포인터로 변환 (여기서 재부팅 여부가 갈림)
+                    ' 구조체를 포인터로 변환 (여기서 잘못꼬이면 장비가 재부팅함.....ㅠㅠ)
                     Marshal.StructureToPtr(faceExWarped, ptrFaceBuf, False)
                     userBlob.faceExObjs = ptrFaceBuf
 
 
-                    '' [구버전 - 문제 발생시 아래 코드로 구조체 사용 시도
+                    '' 재부팅되고 그러면 아래 코드로 변경..
                     'userBlob.user.numFaces = 1
 
-                    '' [수정] Safe 구조체 사용
+                    '' 구조체 사용
                     'Dim faceExSafe As New BS2FaceExWarped_Safe()
                     'faceExSafe.faceIndex = 0
                     'faceExSafe.numOfTemplate = 1
                     'faceExSafe.flag = 1
                     'faceExSafe.unused = New Byte(5) {}
 
-                    '' 2. 이미지 데이터 복사
+                    '' 이미지 데이터 복사
                     'faceExSafe.imageLen = CUInt(warpedImageBytes.Length)
                     'faceExSafe.imageData = New Byte(BS2Environment.BS2_MAX_WARPED_IMAGE_LENGTH - 1) {}
                     'Array.Copy(warpedImageBytes, faceExSafe.imageData, warpedImageBytes.Length)
 
-                    '' 3. IR 데이터 초기화
+                    '' IR 데이터 초기화
                     'faceExSafe.irImageLen = 0
                     'faceExSafe.irImageData = New Byte(BS2Environment.BS2_MAX_WARPED_IR_IMAGE_LENGTH - 1) {}
 
-                    '' 4. [핵심] 템플릿 데이터를 바이트 배열(Blob)로 직접 복사
-                    '' 구조체(BS2TemplateEx)를 바이트 배열로 변환하여 flat하게 넣습니다.
+                    '' 템플릿 데이터를 바이트 Blob 배열로 직접 복사
                     'Dim templateTotalSize As Integer = 11120 ' 20개 * 556바이트
                     'faceExSafe.templateExBlob = New Byte(templateTotalSize - 1) {}
 
-                    '' 추출된 템플릿(1개)을 바이트로 변환
                     'Dim tempSize As Integer = Marshal.SizeOf(GetType(BS2TemplateEx))
                     'Dim ptrTemp As IntPtr = Marshal.AllocHGlobal(tempSize)
 
                     'Try
-                    '    ' 구조체 -> 포인터 -> 바이트 배열 복사
                     '    Marshal.StructureToPtr(extractedTemplate, ptrTemp, False)
                     '    Marshal.Copy(ptrTemp, faceExSafe.templateExBlob, 0, tempSize)
-                    '    ' (나머지 19개 슬롯은 이미 0으로 초기화되어 있으므로 신경 안 써도 됨)
                     'Finally
                     '    Marshal.FreeHGlobal(ptrTemp)
                     'End Try
 
-                    '' 5. 메모리 할당 및 연결 (Safe 구조체 사용)
+                    '' 메모리 할당 및 연결 
                     'Dim sizeOfSafeStruct As Integer = Marshal.SizeOf(GetType(BS2FaceExWarped_Safe))
                     'ptrFaceBuf = Marshal.AllocHGlobal(sizeOfSafeStruct)
                     'Marshal.StructureToPtr(faceExSafe, ptrFaceBuf, False)
@@ -650,79 +635,8 @@ Public Class Form1
 
     End Sub
 
-    ' 이미지 파일에서 템플릿을 추출하는 함수
-    Private Function ExtractTemplateFromImage(imagePath As String, ByRef outTemplate As BS2TemplateEx) As Boolean
 
-        ' 1. 파일 존재 확인
-        If Not File.Exists(imagePath) Then
-            MessageBox.Show("이미지 파일이 없습니다: " & imagePath)
-            Return False
-        End If
-
-        ' 2. JPG 파일 읽기 (바이트 배열)
-        Dim imageBytes As Byte() = File.ReadAllBytes(imagePath)
-
-        ' 3. 비관리 메모리 할당 및 복사
-        Dim ptrImage As IntPtr = Marshal.AllocHGlobal(imageBytes.Length)
-        Try
-            Marshal.Copy(imageBytes, 0, ptrImage, imageBytes.Length)
-
-            ' 4. 템플릿 추출 API 호출 (BS2_ExtractTemplateFaceEx)
-            ' SFApi.vb 에 정의된 함수 사용
-            ' isWarped: 0 (일반 이미지인 경우)
-            Dim result As BS2ErrorCode = API.BS2_ExtractTemplateFaceEx(sdkContext, connectedDeviceId, ptrImage, CUInt(imageBytes.Length), 0, outTemplate)
-
-            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
-                Return True
-            Else
-                Dim errCode As Integer = CInt(result)
-                Dim msg As String = ""
-                Select Case errCode
-                    Case -300 ' BS_SDK_ERROR_EXTRACTION_FAIL
-                        msg = "얼굴 특징 추출 실패 (일반적인 실패, 이미지가 손상되었거나 지원되지 않는 포맷일 수 있음)"
-                    Case -308 ' BS_SDK_ERROR_EXTRACTION_LOW_QUALITY
-                        msg = "이미지 품질이 너무 낮습니다. (흐릿함, 노이즈, 조명 불량)"
-                    Case -314 ' BS_SDK_ERROR_CANNOT_FIND_FACE
-                        msg = "얼굴을 찾을 수 없습니다. (배경이 복잡하거나 얼굴이 아님)"
-                    Case -321 ' BS_SDK_ERROR_CANNOT_ESTIMATE
-                        msg = "얼굴 랜드마크(눈, 코, 입)를 추정할 수 없습니다."
-                    Case -322 ' BS_SDK_ERROR_NORMALIZE_FACE
-                        msg = "얼굴 정규화 실패 (얼굴 각도가 너무 틀어짐)"
-                    Case -323 ' BS_SDK_ERROR_SMALL_DETECTION
-                        msg = "얼굴 크기가 너무 작습니다. (해상도를 높이거나 얼굴을 크게 편집)"
-                    Case -324 ' BS_SDK_ERROR_LARGE_DETECTION
-                        msg = "얼굴 크기가 너무 큽니다. (해상도를 줄이세요)"
-                    Case -325 ' BS_SDK_ERROR_BIASED_DETECTION
-                        msg = "얼굴이 한쪽으로 치우쳐 있습니다. (중앙에 위치시켜 주세요)"
-                    Case -326 ' BS_SDK_ERROR_ROTATED_FACE
-                        msg = "얼굴이 기울어져 있습니다. (정면을 똑바로 응시해야 함)"
-                    Case -327 ' BS_SDK_ERROR_OVERLAPPED_FACE
-                        msg = "얼굴이 겹쳐 보이거나 여러 명의 얼굴이 감지되었습니다."
-                    Case -328 ' BS_SDK_ERROR_UNOPENED_EYES
-                        msg = "눈을 감고 있거나 안경/빛 반사로 눈을 찾을 수 없습니다."
-                    Case -329 ' BS_SDK_ERROR_NOT_LOOKING_FRONT
-                        msg = "시선이 정면이 아닙니다. (측면, 위, 아래)"
-                    Case -330 ' BS_SDK_ERROR_OCCLUDED_MOUTH
-                        msg = "입이 가려져 있습니다. (마스크 등)"
-                    Case -332 ' BS_SDK_ERROR_INCOMPATIBLE_FACE
-                        msg = "호환되지 않는 얼굴 데이터입니다."
-                    Case -10008 ' BS_SDK_ERROR_INTERNAL
-                        msg = "장치 내부 오류 (장치 재부팅 필요할 수 있음)"
-                    Case Else
-                        msg = "알 수 없는 오류"
-                End Select
-                MessageBox.Show($"템플릿 추출 실패.{vbCrLf}코드: {errCode} ({result}){vbCrLf}원인: {msg}")
-                Return False
-            End If
-
-        Finally
-            ' 메모리 해제
-            If ptrImage <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrImage)
-        End Try
-
-    End Function
     ' 테스트용: 장비가 얼굴을 제대로 정규화(Normalize) 하는지 확인하는 함수
-    ' [테스트용 함수] 장비가 얼굴 이미지를 받아들일 수 있는지 확인
     Private Sub TestNormalizeImage(imagePath As String)
         If Not System.IO.File.Exists(imagePath) Then Return
 
@@ -763,130 +677,9 @@ Public Class Form1
         End Try
 
     End Sub
-    ' jpg 이미지 파일에서 얼굴 데이터를 추출하는 함수
-    Private Function GetFaceDataFromImage(imagePath As String, ByRef outTemplate As BS2TemplateEx, ByRef outWarpedImage As Byte()) As Boolean
-        If Not File.Exists(imagePath) Then Return False
-
-        Dim rawImageBytes As Byte() = File.ReadAllBytes(imagePath)
-        Dim ptrRawImage As IntPtr = Marshal.AllocHGlobal(rawImageBytes.Length)
-
-        Dim warpedBufferSize As Integer = BS2Environment.BS2_MAX_WARPED_IMAGE_LENGTH
-        Dim ptrWarpedImage As IntPtr = Marshal.AllocHGlobal(warpedBufferSize)
-        Dim warpedLen As UInteger = 0
-
-        Try
-            Marshal.Copy(rawImageBytes, 0, ptrRawImage, rawImageBytes.Length)
-            ' 정규화 수행
-            Dim result As BS2ErrorCode = API.BS2_GetNormalizedImageFaceEx(sdkContext, connectedDeviceId, ptrRawImage, CUInt(rawImageBytes.Length), ptrWarpedImage, warpedLen)
-
-            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"[1단계 실패] 얼굴 정규화 실패.{vbCrLf}오류: {result} ({CInt(result)})")
-                Return False
-            End If
-
-            ' 템플릿 추출
-            result = API.BS2_ExtractTemplateFaceEx(sdkContext, connectedDeviceId, ptrWarpedImage, warpedLen, 1, outTemplate) ' isWarped 파라미터를 1(True)로 설정
-            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"[2단계 실패] 템플릿 추출 실패.{vbCrLf}오류: {result} ({CInt(result)})")
-                Return False
-            End If
-            ReDim outWarpedImage(CInt(warpedLen) - 1)
-            Marshal.Copy(ptrWarpedImage, outWarpedImage, 0, CInt(warpedLen))
-            Return True
-        Finally
-            If ptrRawImage <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrRawImage)
-            If ptrWarpedImage <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrWarpedImage)
-        End Try
-
-    End Function
-    ' Base64 문자열에서 얼굴 데이터를 추출하는 함수
-    Private Function GetFaceDataFromBase64(base64String As String, ByRef outTemplate As BS2TemplateEx, ByRef outWarpedImage As Byte()) As Boolean
-
-        If String.IsNullOrEmpty(base64String) Then Return False
-
-        Dim rawImageBytes As Byte() = Nothing
-        Try
-            rawImageBytes = Convert.FromBase64String(base64String)
-        Catch ex As Exception
-            MessageBox.Show("Base64 디코딩 실패: " & ex.Message)
-            Return False
-        End Try
-
-        Dim ptrRawImage As IntPtr = Marshal.AllocHGlobal(rawImageBytes.Length)
-        Dim warpedBufferSize As Integer = BS2Environment.BS2_MAX_WARPED_IMAGE_LENGTH
-        Dim ptrWarpedImage As IntPtr = Marshal.AllocHGlobal(warpedBufferSize)
-        Dim warpedLen As UInteger = 0
-
-        Try
-            Marshal.Copy(rawImageBytes, 0, ptrRawImage, rawImageBytes.Length)
-            ' 정규화 수행
-            Dim result As BS2ErrorCode = API.BS2_GetNormalizedImageFaceEx(sdkContext, connectedDeviceId, ptrRawImage, CUInt(rawImageBytes.Length), ptrWarpedImage, warpedLen)
-            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"[1단계 실패] 얼굴 정규화 실패.{vbCrLf}오류: {result} ({CInt(result)})")
-                Return False
-            End If
-            ' 템플릿 추출
-            result = API.BS2_ExtractTemplateFaceEx(sdkContext, connectedDeviceId, ptrWarpedImage, warpedLen, 1, outTemplate) ' isWarped 파라미터를 1(True)로 설정
-            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"[2단계 실패] 템플릿 추출 실패.{vbCrLf}오류: {result} ({CInt(result)})")
-                Return False
-            End If
-            ' 결과 반환
-            ReDim outWarpedImage(CInt(warpedLen) - 1)
-            Marshal.Copy(ptrWarpedImage, outWarpedImage, 0, CInt(warpedLen))
-            Return True
-        Finally
-            If ptrRawImage <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrRawImage)
-            If ptrWarpedImage <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrWarpedImage)
-        End Try
-
-    End Function
-    Private Sub btnRemoveUser_Click(sender As Object, e As EventArgs) Handles btnRemoveUser.Click
-
-        '============= 사용자 삭제  ==================
-        ' 1. 연결 상태 확인
-        If sdkContext = IntPtr.Zero OrElse connectedDeviceId = 0 Then
-            MessageBox.Show("장치에 먼저 연결해주세요.")
-            Return
-        End If
-
-        ' 2. 삭제할 ID 가져오기
-        Dim targetUserId = txtUserID.Text.Trim
-        If String.IsNullOrEmpty(targetUserId) Then
-            MessageBox.Show("삭제할 사용자 ID를 입력해주세요.")
-            txtUserID.Focus()
-            Return
-        End If
-
-        ' 3. ID를 바이트 배열로 변환 (API 규격 맞춤)
-        Dim uidBytes(BS2_USER_ID_SIZE - 1) As Byte
-        Dim strBytes = System.Text.Encoding.UTF8.GetBytes(targetUserId)
-        Array.Copy(strBytes, uidBytes, Math.Min(strBytes.Length, uidBytes.Length))
-
-        ' 4. 메모리 할당 및 삭제 명령 전송
-        Dim ptrUid = Marshal.AllocHGlobal(BS2_USER_ID_SIZE)
-        Try
-            Marshal.Copy(uidBytes, 0, ptrUid, BS2_USER_ID_SIZE)
-            Dim result As BS2ErrorCode = BS2_RemoveUser(sdkContext, connectedDeviceId, ptrUid, 1)
-            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"사용자({targetUserId}) 삭제 완료!")
-            ElseIf result = BS2ErrorCode.BS_SDK_ERROR_CANNOT_FIND_USER Then
-                MessageBox.Show("삭제 실패: 장치에 없는 사용자 ID입니다.")
-            Else
-                MessageBox.Show($"삭제 실패 (오류: {result})")
-            End If
-        Finally
-            If ptrUid <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrUid)
-        End Try
-
-    End Sub
-
     Private Sub btnTestImage_Click(sender As Object, e As EventArgs) Handles btnTestImage.Click
 
-        If sdkContext = IntPtr.Zero OrElse connectedDeviceId = 0 Then
-            MessageBox.Show("장치에 먼저 연결해주세요.")
-            Return
-        End If
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
         Dim imagePath As String = txtImagePath.Text.Trim()
         If String.IsNullOrEmpty(imagePath) OrElse Not System.IO.File.Exists(imagePath) Then
@@ -900,14 +693,9 @@ Public Class Form1
 
     Private Sub btnUpdateFace_Click(sender As Object, e As EventArgs) Handles btnUpdateFace.Click
 
-        ' 연결 상태 확인
-        If sdkContext = IntPtr.Zero OrElse connectedDeviceId = 0 Then
-            MessageBox.Show("장치에 먼저 연결해주세요.")
-            Return
-        End If
+        If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
-        ' 수정할 대상 ID 확인
-        Dim targetUserId As String = txtUserID.Text.Trim()
+        Dim targetUserId = txtUserID.Text.Trim
         If String.IsNullOrEmpty(targetUserId) Then
             MessageBox.Show("수정할 사용자 ID를 입력해주세요.")
             txtUserID.Focus()
@@ -920,29 +708,35 @@ Public Class Form1
             Return
         End If
 
-        Dim imagePath As String = txtImagePath.Text.Trim()
-        If String.IsNullOrEmpty(imagePath) OrElse Not System.IO.File.Exists(imagePath) Then
+        Dim imagePath = txtImagePath.Text.Trim
+        If String.IsNullOrEmpty(imagePath) OrElse Not File.Exists(imagePath) Then
             MessageBox.Show("유효한 이미지 파일 경로가 없습니다.")
             Return
         End If
 
+
         ' 사용자 구조체 준비
         Dim userBlob As New BS2UserFaceExBlob()
 
-        ' 유저아이디 설정
+        ' 유저 아이디 설정
         userBlob.user.userID = New Byte(BS2Environment.BS2_USER_ID_SIZE - 1) {}
         Dim uidBytes = System.Text.Encoding.UTF8.GetBytes(targetUserId)
         Array.Copy(uidBytes, userBlob.user.userID, Math.Min(uidBytes.Length, userBlob.user.userID.Length))
 
-        ' 나머지 필수 배열들 초기화 (Null 에러 방지용 더미 초기화)
+        ' 이름 세팅
         userBlob.name = New Byte(BS2Environment.BS2_USER_NAME_LEN - 1) {}
+        Dim newName As String = txtMemNm.Text.Trim()
+        If Not String.IsNullOrEmpty(newName) Then
+            Dim nameBytes = System.Text.Encoding.UTF8.GetBytes(newName)
+            Array.Copy(nameBytes, userBlob.name, Math.Min(nameBytes.Length, userBlob.name.Length))
+        End If
+
+        ' 배열 초기화
         userBlob.pin = New Byte(BS2Environment.BS2_PIN_HASH_SIZE - 1) {}
         userBlob.phrase = New Byte(BS2Environment.BS2_USER_PHRASE_SIZE - 1) {}
         userBlob.accessGroupId = New UInt32(BS2Environment.BS2_MAX_ACCESS_GROUP_PER_USER - 1) {}
         userBlob.settingEx = New BS2UserSettingEx()
         userBlob.settingEx.reserved = New Byte(27) {}
-
-        ' 포인터 초기화
         userBlob.cardObjs = IntPtr.Zero
         userBlob.fingerObjs = IntPtr.Zero
         userBlob.faceObjs = IntPtr.Zero
@@ -956,55 +750,54 @@ Public Class Form1
             Dim extractedTemplate As New BS2TemplateEx()
             Dim warpedImageBytes As Byte() = Nothing
 
-            ' 템플릿 및 이미지 추출
-            If GetFaceDataFromImage(imagePath, extractedTemplate, warpedImageBytes) Then
+            'GetFaceDataFromBase64  = : base64 문자열에서 템플릿 추출
+            If GetFaceDataFromImage(sdkContext, connectedDeviceId, imagePath, extractedTemplate, warpedImageBytes) Then
 
-                userBlob.user.numFaces = 1 ' 얼굴 개수 1개로 설정
+                userBlob.user.numFaces = 1
 
-                ' Safe 구조체 구성
-                Dim faceExSafe As New BS2FaceExWarped_Safe()
-                faceExSafe.faceIndex = 0
-                faceExSafe.numOfTemplate = 1
-                faceExSafe.flag = 1 ' [중요] WARPED (1)
-                faceExSafe.unused = New Byte(5) {}
+                Dim faceExWarped As New BS2FaceExWarped()
+                faceExWarped.faceIndex = 0
+                faceExWarped.numOfTemplate = 1
+                faceExWarped.flag = 1
+                faceExWarped.reserved = 0
+                faceExWarped.unused = New Byte(5) {}
 
-                ' 이미지 복사
-                faceExSafe.imageLen = CUInt(warpedImageBytes.Length)
-                faceExSafe.imageData = New Byte(BS2Environment.BS2_MAX_WARPED_IMAGE_LENGTH - 1) {}
-                Array.Copy(warpedImageBytes, faceExSafe.imageData, warpedImageBytes.Length)
+                ' 이미지 데이터 복사
+                faceExWarped.imageLen = CUInt(warpedImageBytes.Length)
+                faceExWarped.imageData = New Byte(BS2Environment.BS2_MAX_WARPED_IMAGE_LENGTH - 1) {}
+                Array.Copy(warpedImageBytes, faceExWarped.imageData, warpedImageBytes.Length)
 
-                ' IR 초기화
-                faceExSafe.irImageLen = 0
-                faceExSafe.irImageData = New Byte(BS2Environment.BS2_MAX_WARPED_IR_IMAGE_LENGTH - 1) {}
+                ' IR 데이터 초기화
+                faceExWarped.irImageLen = 0
+                faceExWarped.irImageData = New Byte(BS2Environment.BS2_MAX_WARPED_IR_IMAGE_LENGTH - 1) {}
 
-                ' 템플릿 복사
-                faceExSafe.templateExBlob = New Byte(11120 - 1) {}
-                Dim tempSize As Integer = Marshal.SizeOf(GetType(BS2TemplateEx))
-                Dim ptrTemp As IntPtr = Marshal.AllocHGlobal(tempSize)
-                Try
-                    Marshal.StructureToPtr(extractedTemplate, ptrTemp, False)
-                    Marshal.Copy(ptrTemp, faceExSafe.templateExBlob, 0, tempSize)
-                Finally
-                    Marshal.FreeHGlobal(ptrTemp)
-                End Try
+                ' 템플릿 배열 초기화 및 할당
+                faceExWarped.templateEx = New BS2TemplateEx(BS2Environment.BS2_MAX_TEMPLATES_PER_FACE_EX - 1) {}
+                faceExWarped.templateEx(0) = extractedTemplate
 
-                ' 메모리 연결
-                Dim sizeOfSafe As Integer = Marshal.SizeOf(GetType(BS2FaceExWarped_Safe))
-                ptrFaceBuf = Marshal.AllocHGlobal(sizeOfSafe)
-                Marshal.StructureToPtr(faceExSafe, ptrFaceBuf, False)
+                For i As Integer = 1 To BS2Environment.BS2_MAX_TEMPLATES_PER_FACE_EX - 1
+                    faceExWarped.templateEx(i) = New BS2TemplateEx()
+                    faceExWarped.templateEx(i).data = New Byte(BS2Environment.BS2_FACE_EX_TEMPLATE_SIZE - 1) {}
+                    faceExWarped.templateEx(i).reserved = New Byte(2) {}
+                Next
+
+                ' 메모리 할당 및 연결
+                Dim sizeOfFaceEx As Integer = Marshal.SizeOf(GetType(BS2FaceExWarped))
+                ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
+                Marshal.StructureToPtr(faceExWarped, ptrFaceBuf, False)
                 userBlob.faceExObjs = ptrFaceBuf
             Else
                 Return
             End If
 
-
-            ' 부분 업데이트 전송 (BS2_PartialUpdateUserFaceEx)
-            ' 마스크: BS2UserMaskEnum.FACE_EX (Visual Face 정보만 업데이트하겠다는 뜻)
+            Dim updateMask As Integer = BS2UserMaskEnum.FACE_EX Or BS2UserMaskEnum.NAME
             Dim userList As BS2UserFaceExBlob() = {userBlob}
-            Dim result As BS2ErrorCode = API.BS2_PartialUpdateUserFaceEx(sdkContext, connectedDeviceId, BS2UserMaskEnum.FACE_EX, userList, 1)
+
+            ' API 호출
+            Dim result As BS2ErrorCode = API.BS2_PartialUpdateUserFaceEx(sdkContext, connectedDeviceId, updateMask, userList, 1)
 
             If result = BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"사용자({targetUserId}) 얼굴 수정 완료!")
+                MessageBox.Show($"사용자({targetUserId}) 정보(이름, 얼굴) 수정 완료!")
             ElseIf result = BS2ErrorCode.BS_SDK_ERROR_CANNOT_FIND_USER Then
                 MessageBox.Show("수정 실패: 존재하지 않는 사용자 ID입니다.")
             Else
@@ -1018,4 +811,407 @@ Public Class Form1
 
     End Sub
 
+    Private Sub btnGetUserList_Click(sender As Object, e As EventArgs) Handles btnGetUserList.Click
+
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+
+        txtUserList.Clear()
+        Application.DoEvents()
+
+        Dim uidObj As IntPtr = IntPtr.Zero
+        Dim numUser As UInteger = 0
+
+        Try
+            ' 전체 사용자 ID 목록 가져오기
+            Dim result As BS2ErrorCode = API.BS2_GetUserList(sdkContext, connectedDeviceId, uidObj, numUser, Nothing)  ' Nothing : 전체 목록을 한 번에 받음..
+
+            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show($"리스트 조회 실패. 오류: {result}")
+                Return
+            End If
+
+            If numUser = 0 Then
+                txtUserList.AppendText("등록된 사용자가 없습니다.")
+                Return
+            End If
+
+            txtUserList.AppendText($"총 {numUser}명의 사용자가 검색되었습니다." & vbCrLf & "--------------------------------" & vbCrLf)
+
+
+            ' 상세 정보(이름) 조회 (BS2_GetUserDatas)
+            ' 사용자가 너무 많으면(수천 명) 한 번에 가져올 때 메모리 부족이 발생할 수 있으므로
+            ' 실제로는 100~500명씩 끊어서 가져오는 것이 좋음...테스트에서는 전체를 요청.
+            Dim userBlobs(CInt(numUser) - 1) As BS2UserBlob
+
+            ' 구조체 배열 초기화
+            For i As Integer = 0 To userBlobs.Length - 1
+                userBlobs(i).user.userID = New Byte(BS2Environment.BS2_USER_ID_SIZE - 1) {}
+                userBlobs(i).name = New Byte(BS2Environment.BS2_USER_NAME_LEN - 1) {}
+                userBlobs(i).pin = New Byte(BS2Environment.BS2_PIN_HASH_SIZE - 1) {}
+                userBlobs(i).accessGroupId = New UInt32(BS2Environment.BS2_MAX_ACCESS_GROUP_PER_USER - 1) {}
+                userBlobs(i).photo.data = New Byte(BS2Environment.BS2_USER_PHOTO_SIZE - 1) {} ' 사진 데이터 공간도 확보
+                userBlobs(i).cardObjs = IntPtr.Zero
+                userBlobs(i).fingerObjs = IntPtr.Zero
+                userBlobs(i).faceObjs = IntPtr.Zero
+            Next
+
+            ' ID 목록 포인터(uidObj)를 그대로 사용하여 상세 정보 요청
+            ' 마스크: DATA(기본정보) Or NAME(이름)
+            Dim mask As UInteger = BS2UserMaskEnum.DATA Or BS2UserMaskEnum.NAME
+            result = API.BS2_GetUserDatas(sdkContext, connectedDeviceId, uidObj, numUser, userBlobs, mask)
+
+            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
+                txtUserList.AppendText($"상세 정보 조회 실패 (오류: {result})" & vbCrLf)
+            Else
+                For i As Integer = 0 To CInt(numUser) - 1
+                    Dim userid As String = System.Text.Encoding.UTF8.GetString(userBlobs(i).user.userID).TrimEnd(Chr(0))
+                    Dim name As String = System.Text.Encoding.UTF8.GetString(userBlobs(i).name).TrimEnd(Chr(0))
+                    If String.IsNullOrEmpty(name) Then name = "(이름 없음)"
+                    txtUserList.AppendText($"[{i + 1}] UserID: {userid}  /  이름: {name}" & vbCrLf)
+                Next
+            End If
+        Finally
+            If uidObj <> IntPtr.Zero Then
+                API.BS2_ReleaseObject(uidObj)
+            End If
+        End Try
+
+    End Sub
+    Private Sub btnSetDeviceMode_Click(sender As Object, e As EventArgs) Handles btnSetDeviceMode.Click
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+        SetServerMatchingMode(sdkContext, connectedDeviceId, 0)  ' 장비에서 인증 (장비에 얼굴등록되어있으면 문 열어주기)
+    End Sub
+
+    Private Sub btnSetServerMode_Click(sender As Object, e As EventArgs) Handles btnSetServerMode.Click
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+        SetServerMatchingMode(sdkContext, connectedDeviceId, 1)   ' 서버에서 인증 (장비에는 얼굴등록 안 하고 서버 DB와 대조해서 서버에서 수동으로 문 열어준다.)
+    End Sub
+    Private Sub btnRemoveUser_Click(sender As Object, e As EventArgs) Handles btnRemoveUser.Click
+
+        '============= 사용자 삭제  ==================
+        If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+
+
+        If chkAllUserDel.Checked Then   ' 전체삭제
+            Dim confirm = MessageBox.Show("장치에 저장된 모든 사용자가 삭제됩니다." & vbCrLf & "계속 진행하시겠습니까?",
+                                            "전체 삭제 경고",
+                                            MessageBoxButtons.YesNo,
+                                            MessageBoxIcon.Warning)
+
+            If confirm = DialogResult.No Then Return
+
+            Dim result As BS2ErrorCode = BS2_RemoveAllUser(sdkContext, connectedDeviceId)
+
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show("모든 사용자가 정상적으로 삭제되었습니다.")
+            Else
+                MessageBox.Show($"전체 삭제 실패.{vbCrLf}오류 코드: {result} ({CInt(result)})")
+            End If
+        Else  ' 개별삭제
+            Dim targetUserId = txtUserID.Text.Trim
+            If String.IsNullOrEmpty(targetUserId) Then
+                MessageBox.Show("삭제할 사용자 ID를 입력해주세요.")
+                txtUserID.Focus()
+                Return
+            End If
+
+            Dim uidBytes(BS2_USER_ID_SIZE - 1) As Byte
+            Dim strBytes = System.Text.Encoding.UTF8.GetBytes(targetUserId)
+            Array.Copy(strBytes, uidBytes, Math.Min(strBytes.Length, uidBytes.Length))
+
+            Dim ptrUid = Marshal.AllocHGlobal(BS2_USER_ID_SIZE)
+            Try
+                Marshal.Copy(uidBytes, 0, ptrUid, BS2_USER_ID_SIZE)
+                Dim result As BS2ErrorCode = BS2_RemoveUser(sdkContext, connectedDeviceId, ptrUid, 1)
+                If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    MessageBox.Show($"사용자({targetUserId}) 삭제 완료!")
+                ElseIf result = BS2ErrorCode.BS_SDK_ERROR_CANNOT_FIND_USER Then
+                    MessageBox.Show("삭제 실패: 장치에 없는 사용자 ID입니다.")
+                Else
+                    MessageBox.Show($"삭제 실패 (오류: {result})")
+                End If
+            Finally
+                If ptrUid <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrUid)
+            End Try
+        End If
+
+    End Sub
+
+    Private Sub btnStartMonitoring_Click(sender As Object, e As EventArgs) Handles btnStartMonitoring.Click
+
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+
+        cbOnLogReceived = New API.OnLogReceived(AddressOf RealTimeLogHandler)
+        Dim result As BS2ErrorCode = API.BS2_StartMonitoringLog(sdkContext, connectedDeviceId, cbOnLogReceived)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            MessageBox.Show("실시간 장비 로그 모니터링 시작!!!!!")   ' 장비에서 발생되는 모든 이벤트 로그를 실시간으로 받아서 텍스트박스에 뿌려준다.
+        Else
+            MessageBox.Show($"모니터링 시작 실패: {result}")
+        End If
+
+    End Sub
+    ' 실시간 로그 처리 함수 : 장비에서 이벤트가 발생할 때마다 호출됨
+    Private Sub RealTimeLogHandler(deviceId As UInteger, logPtr As IntPtr)
+
+        If logPtr = IntPtr.Zero Then Return
+
+        Dim log As BS2Event = Marshal.PtrToStructure(Of BS2Event)(logPtr)
+        Dim eventCode As UShort = log.code
+        Dim userId As String = System.Text.Encoding.UTF8.GetString(log.userID).TrimEnd(Chr(0))
+
+        ' Invoke: UI 작업이 끝날 때까지 SDK 통신 스레드를 붙잡고 있음 (장비 대기 발생 -> 딜레이 원인)
+        ' BeginInvoke: "이거 나중에 처리해" 하고 SDK 스레드는 즉시 장비에 응답(ACK)을 보냄 (딜레이 해결)
+        Me.BeginInvoke(Sub()
+                           Dim curTime As String = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                           Dim eventName As String = CType(eventCode, BS2EventCodeEnum).ToString()
+
+                           txtRealTimeLog.AppendText($"[{curTime}] ::: ID:{userId} / {eventName} (0x{eventCode:X4})" & vbCrLf)
+
+                           Dim isFaceSuccess As Boolean = (eventCode = BS2EventCodeEnum.IDENTIFY_SUCCESS_FACE)
+                           ' 장비에서 얼굴 인증 성공 이벤트인 경우에만 문 열기 시도
+                           If isFaceSuccess Then
+
+                               ' 문 열지 말지 결정하는 부분 
+                               ' 게이트데몬에서 api 호출하는 부분 코딩해야함..
+
+
+
+                               If userId = "1234" Then
+                                   txtRealTimeLog.AppendText(">> [문을 연다] 얼굴 인증 성공 & ID 1234 확인됨!" & vbCrLf)
+
+                                   'UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)
+                                   OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..
+                                   'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기
+                               Else
+                                   txtRealTimeLog.AppendText($">> [문을 열지않음] (ID: {userId})" & vbCrLf)
+                               End If
+                           End If
+                       End Sub)
+    End Sub
+    ' 도어 ID를 지정하여 문을 여는 함수
+    Private Sub UnlockDoor(deviceId As UInteger, targetDoorId As UInteger)
+
+        Dim ptrDoorIds As IntPtr = Marshal.AllocHGlobal(4)
+        Try
+            Marshal.WriteInt32(ptrDoorIds, CInt(targetDoorId))
+            Dim result As BS2ErrorCode = API.BS2_UnlockDoor(sdkContext, deviceId, BS2DoorFlagEnum.NONE, ptrDoorIds, 1)
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                txtRealTimeLog.AppendText($">> [실제로 문이 열림]" & vbCrLf)
+            Else
+                txtRealTimeLog.AppendText($">> [실제로 문 열기 실패] : {result}" & vbCrLf)
+            End If
+        Finally
+            Marshal.FreeHGlobal(ptrDoorIds)
+        End Try
+
+    End Sub
+    ' Door ID가 없어도 릴레이를 직접 작동시킨다.
+    ' relayIndex: 보통 0번이 1번 릴레이..
+    ' deviceId: 장비 아이디
+    Private Sub OpenRelay(deviceId As UInteger, relayIndex As Integer)
+
+        Dim action As New BS2Action()
+        action.deviceID = deviceId
+        action.type = BS2ActionTypeEnum.RELAY
+        action.stopFlag = 0
+        action.delay = 0
+
+        ' 릴레이 액션 세부 설정
+        Dim relayAction As New BS2RelayAction()
+        relayAction.relayIndex = CByte(relayIndex)
+
+        relayAction.reserved = New Byte(2) {}  ' 배열 초기화
+
+        ' 신호 설정 (3초간 켜짐)
+        relayAction.signal.signalID = 0
+        relayAction.signal.count = 1          ' 1번 작동
+        relayAction.signal.onDuration = 3000  ' 3000ms (3초) 켜짐
+        relayAction.signal.offDuration = 0
+        relayAction.signal.delay = 0
+
+        ' actionUnion 배열을 초기화
+        action.actionUnion = New Byte(31) {}
+
+        ' RelayAction을 바이트 배열로 변환
+        Dim sizeRelay As Integer = Marshal.SizeOf(GetType(BS2RelayAction))
+        Dim ptrRelay As IntPtr = Marshal.AllocHGlobal(sizeRelay)
+
+        Try
+            Marshal.StructureToPtr(relayAction, ptrRelay, False)
+            Marshal.Copy(ptrRelay, action.actionUnion, 0, sizeRelay)
+        Finally
+            Marshal.FreeHGlobal(ptrRelay)
+        End Try
+
+        ' BS2_RunAction api는 장비에 어떤 명령이든 줄수있는 토탈api이다. 이 api에다가 릴레이 작동명령을 넣어서 장비에 전송한다.
+        Dim result As BS2ErrorCode = API.BS2_RunAction(sdkContext, deviceId, action)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            txtRealTimeLog.AppendText(">> [성공] 릴레이 작동 명령 전송 완료!" & vbCrLf)
+        Else
+            txtRealTimeLog.AppendText($">> [실패] 릴레이 작동 실패 : {result}" & vbCrLf)
+        End If
+
+    End Sub
+    Private Sub btnRemoveAllDoors_Click(sender As Object, e As EventArgs) Handles btnRemoveAllDoors.Click
+
+        If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+
+        ' 도어설정을 삭제해야 수동으로 접점신호를 주는게 가능하다.
+        Dim confirm = MessageBox.Show("장치에 설정된 도어정보가 모두 삭제됨!!!" & vbCrLf &
+                                        "계속하시겠습니까?",
+                                        "도어정보 전체 삭제",
+                                        MessageBoxButtons.YesNo,
+                                        MessageBoxIcon.Warning)
+
+        If confirm = DialogResult.No Then Return
+        Dim result As BS2ErrorCode = BS2_RemoveAllDoor(sdkContext, connectedDeviceId)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            MessageBox.Show("모든 도어정보 삭제완료!!")
+        Else
+            MessageBox.Show($"도어정보 삭제 실패.{vbCrLf}오류 코드: {result} ({CInt(result)})")
+        End If
+
+    End Sub
+
+    Private Sub btnGetDoorList_Click(sender As Object, e As EventArgs) Handles btnGetDoorList.Click
+
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+
+        txtDoorList.Clear()
+
+        Dim doorObj As IntPtr = IntPtr.Zero
+        Dim numDoor As UInteger = 0
+
+        Try
+            Dim result As BS2ErrorCode = API.BS2_GetAllDoor(sdkContext, connectedDeviceId, doorObj, numDoor)
+
+            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show($"도어 목록 조회 실패: {result}")
+                Return
+            End If
+
+            If numDoor = 0 Then
+                txtDoorList.AppendText(">> 설정된 문(Door)이 없습니다." & vbCrLf)
+                Return
+            End If
+
+            txtDoorList.AppendText($"총 {numDoor}개의 문이 검색되었습니다." & vbCrLf)
+
+            Dim curPtr As IntPtr = doorObj
+            Dim structSize As Integer = Marshal.SizeOf(GetType(BS2Door))
+
+            For i As Integer = 0 To CInt(numDoor) - 1
+                Dim door As BS2Door = Marshal.PtrToStructure(Of BS2Door)(curPtr)
+                Dim doorId As UInt32 = door.doorID
+                Dim doorName As String = System.Text.Encoding.UTF8.GetString(door.name).TrimEnd(Chr(0))
+                Dim entryDevice As UInt32 = door.entryDeviceID
+                Dim relayIndex As Integer = door.relay.port
+
+                txtDoorList.AppendText($"[{i + 1}] Door ID: {doorId} / Name: {doorName}" & vbCrLf)
+                txtDoorList.AppendText($"    - Entry Device: {entryDevice}" & vbCrLf)
+                txtDoorList.AppendText($"    - Relay Port: {relayIndex}" & vbCrLf)
+                txtDoorList.AppendText("--------------------------------" & vbCrLf)
+                curPtr = New IntPtr(curPtr.ToInt64() + structSize)
+            Next
+
+        Finally
+            If doorObj <> IntPtr.Zero Then
+                API.BS2_ReleaseObject(doorObj)
+            End If
+        End Try
+
+    End Sub
+
+    Private Sub TestBuzzer(deviceId As UInteger)
+
+        Dim action As New BS2Action()
+        action.deviceID = deviceId
+        action.type = BS2ActionTypeEnum.BUZZER
+        action.stopFlag = 0
+        action.delay = 0
+
+        ' 부저 액션 세부 설정
+        Dim buzzerAction As New BS2BuzzerAction()
+        buzzerAction.count = 1                 ' 1회 재생
+        buzzerAction.reserved = New Byte(1) {} ' 초기화
+
+        buzzerAction.signal = New BS2BuzzerSignal(BS2Environment.BS2_BUZZER_SIGNAL_NUM - 1) {}
+
+        ' 첫 번째 신호 설정 (삐- 소리)
+        buzzerAction.signal(0).tone = BS2BuzzerToneEnum.HIGH  ' 높은소리
+        buzzerAction.signal(0).fadeout = 0                    ' 페이드아웃 없음
+        buzzerAction.signal(0).duration = 2000    ' 1000 : 1초
+        buzzerAction.signal(0).delay = 0
+
+        ' 나머지 신호 초기화 (사용 안 해도 초기화 필수)
+        For i As Integer = 1 To BS2Environment.BS2_BUZZER_SIGNAL_NUM - 1
+            buzzerAction.signal(i) = New BS2BuzzerSignal()
+        Next
+
+        ' 구조체를 바이트 배열로 변환하여 Union에 복사
+        action.actionUnion = New Byte(31) {} ' 32바이트 할당
+        Dim sizeBuzzer As Integer = Marshal.SizeOf(GetType(BS2BuzzerAction))
+        Dim ptrBuzzer As IntPtr = Marshal.AllocHGlobal(sizeBuzzer)
+
+        Try
+            Marshal.StructureToPtr(buzzerAction, ptrBuzzer, False)
+            Marshal.Copy(ptrBuzzer, action.actionUnion, 0, sizeBuzzer)
+        Finally
+            Marshal.FreeHGlobal(ptrBuzzer)
+        End Try
+
+        ' 명령 전송
+        Dim result As BS2ErrorCode = API.BS2_RunAction(sdkContext, deviceId, action)
+
+        Me.Invoke(Sub()
+                      If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                          txtRealTimeLog.AppendText(">> [성공] 부저(Buzzer) 작동 명령 전송 완료! 실제 소리 확인필요!!" & vbCrLf)
+                      Else
+                          txtRealTimeLog.AppendText($">> [실패] 부저 작동 실패 : {result} ({CInt(result)})" & vbCrLf)
+                      End If
+                  End Sub)
+    End Sub
+    Private Sub btnDisableImageLog_Click(sender As Object, e As EventArgs) Handles btnDisableImageLog.Click
+        DisableImageLog(connectedDeviceId)
+    End Sub
+    Private Sub DisableImageLog(deviceId As UInteger)
+
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, deviceId) Then Return
+
+        ' 1. 현재 이벤트 설정 가져오기
+        Dim eventConfig As IntPtr = IntPtr.Zero
+        Dim configSize As Integer = Marshal.SizeOf(GetType(BS2EventConfig))
+
+        ' 구조체 메모리 할당
+        Dim ptrConfig As IntPtr = Marshal.AllocHGlobal(configSize)
+        Dim simpleConfig As New BS2EventConfig()
+
+        Try
+            ' 현재 설정 조회
+            Dim result As BS2ErrorCode = API.BS2_GetEventConfig(sdkContext, deviceId, simpleConfig)
+
+            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show($"설정 조회 실패: {result}")
+                Return
+            End If
+
+            ' 2. 이미지 로그 필터 초기화 (이미지를 보낼 이벤트 개수를 0으로 설정)
+            simpleConfig.numImageEventFilter = 0
+
+            ' (참고: imageEventFilter 배열 등은 0으로 두면 됨)
+
+            ' 3. 설정 적용
+            result = API.BS2_SetEventConfig(sdkContext, deviceId, simpleConfig)
+
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show("이미지 로그 전송 비활성화 성공!")
+            Else
+                MessageBox.Show($"설정 적용 실패: {result}")
+            End If
+
+        Finally
+            If ptrConfig <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrConfig)
+        End Try
+
+    End Sub
 End Class

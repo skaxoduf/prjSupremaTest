@@ -43,8 +43,20 @@ Partial Class Form1
         rbLoadImage = New RadioButton()
         rbScanDevice = New RadioButton()
         btnTestImage = New Button()
-        btnRemoveUser = New Button()
+        btnSetDeviceMode = New Button()
         btnUpdateFace = New Button()
+        Label4 = New Label()
+        btnGetUserList = New Button()
+        txtUserList = New TextBox()
+        chkAllUserDel = New CheckBox()
+        btnSetServerMode = New Button()
+        btnRemoveUser = New Button()
+        btnStartMonitoring = New Button()
+        txtRealTimeLog = New TextBox()
+        btnRemoveAllDoors = New Button()
+        btnGetDoorList = New Button()
+        txtDoorList = New TextBox()
+        btnDisableImageLog = New Button()
         SuspendLayout()
         ' 
         ' btnDLLLoad
@@ -123,7 +135,6 @@ Partial Class Form1
         txtDeviceInfo.Location = New Point(860, 83)
         txtDeviceInfo.Multiline = True
         txtDeviceInfo.Name = "txtDeviceInfo"
-        txtDeviceInfo.ReadOnly = True
         txtDeviceInfo.ScrollBars = ScrollBars.Vertical
         txtDeviceInfo.Size = New Size(444, 194)
         txtDeviceInfo.TabIndex = 1
@@ -222,9 +233,9 @@ Partial Class Form1
         rbScanDevice.AutoSize = True
         rbScanDevice.Location = New Point(249, 336)
         rbScanDevice.Name = "rbScanDevice"
-        rbScanDevice.Size = New Size(101, 19)
+        rbScanDevice.Size = New Size(125, 19)
         rbScanDevice.TabIndex = 4
-        rbScanDevice.Text = "장비에서 촬영"
+        rbScanDevice.Text = "안면장비에서 촬영"
         rbScanDevice.UseVisualStyleBackColor = True
         ' 
         ' btnTestImage
@@ -236,33 +247,153 @@ Partial Class Form1
         btnTestImage.Text = "jpg 유효성 테스트"
         btnTestImage.UseVisualStyleBackColor = True
         ' 
-        ' btnRemoveUser
+        ' btnSetDeviceMode
         ' 
-        btnRemoveUser.Location = New Point(240, 502)
-        btnRemoveUser.Name = "btnRemoveUser"
-        btnRemoveUser.Size = New Size(130, 44)
-        btnRemoveUser.TabIndex = 0
-        btnRemoveUser.Text = "6. 사용자 삭제"
-        btnRemoveUser.UseVisualStyleBackColor = True
+        btnSetDeviceMode.Location = New Point(391, 322)
+        btnSetDeviceMode.Name = "btnSetDeviceMode"
+        btnSetDeviceMode.Size = New Size(208, 44)
+        btnSetDeviceMode.TabIndex = 0
+        btnSetDeviceMode.Text = "== 장비 인증 모드로 세팅하기 =="
+        btnSetDeviceMode.UseVisualStyleBackColor = True
         ' 
         ' btnUpdateFace
         ' 
-        btnUpdateFace.Location = New Point(25, 502)
+        btnUpdateFace.Location = New Point(25, 494)
         btnUpdateFace.Name = "btnUpdateFace"
         btnUpdateFace.Size = New Size(130, 44)
         btnUpdateFace.TabIndex = 0
         btnUpdateFace.Text = "5. 사용자 수정"
         btnUpdateFace.UseVisualStyleBackColor = True
         ' 
+        ' Label4
+        ' 
+        Label4.AutoSize = True
+        Label4.Location = New Point(185, 170)
+        Label4.Name = "Label4"
+        Label4.Size = New Size(71, 15)
+        Label4.TabIndex = 3
+        Label4.Text = "장치 아이디"
+        ' 
+        ' btnGetUserList
+        ' 
+        btnGetUserList.Location = New Point(25, 544)
+        btnGetUserList.Name = "btnGetUserList"
+        btnGetUserList.Size = New Size(130, 44)
+        btnGetUserList.TabIndex = 0
+        btnGetUserList.Text = "7. 사용자 리스트"
+        btnGetUserList.UseVisualStyleBackColor = True
+        ' 
+        ' txtUserList
+        ' 
+        txtUserList.BackColor = Color.White
+        txtUserList.Location = New Point(25, 594)
+        txtUserList.Multiline = True
+        txtUserList.Name = "txtUserList"
+        txtUserList.ScrollBars = ScrollBars.Vertical
+        txtUserList.Size = New Size(349, 189)
+        txtUserList.TabIndex = 1
+        ' 
+        ' chkAllUserDel
+        ' 
+        chkAllUserDel.AutoSize = True
+        chkAllUserDel.Location = New Point(240, 544)
+        chkAllUserDel.Name = "chkAllUserDel"
+        chkAllUserDel.Size = New Size(74, 19)
+        chkAllUserDel.TabIndex = 5
+        chkAllUserDel.Text = "전체삭제"
+        chkAllUserDel.UseVisualStyleBackColor = True
+        ' 
+        ' btnSetServerMode
+        ' 
+        btnSetServerMode.Location = New Point(605, 322)
+        btnSetServerMode.Name = "btnSetServerMode"
+        btnSetServerMode.Size = New Size(208, 44)
+        btnSetServerMode.TabIndex = 0
+        btnSetServerMode.Text = "== 서버 인증 모드로 세팅하기 =="
+        btnSetServerMode.UseVisualStyleBackColor = True
+        ' 
+        ' btnRemoveUser
+        ' 
+        btnRemoveUser.Location = New Point(240, 494)
+        btnRemoveUser.Name = "btnRemoveUser"
+        btnRemoveUser.Size = New Size(130, 44)
+        btnRemoveUser.TabIndex = 0
+        btnRemoveUser.Text = "6. 사용자 삭제"
+        btnRemoveUser.UseVisualStyleBackColor = True
+        ' 
+        ' btnStartMonitoring
+        ' 
+        btnStartMonitoring.Location = New Point(391, 368)
+        btnStartMonitoring.Name = "btnStartMonitoring"
+        btnStartMonitoring.Size = New Size(268, 43)
+        btnStartMonitoring.TabIndex = 6
+        btnStartMonitoring.Text = "== 장비 실시간 모니터링 시작 =="
+        btnStartMonitoring.UseVisualStyleBackColor = True
+        ' 
+        ' txtRealTimeLog
+        ' 
+        txtRealTimeLog.BackColor = Color.White
+        txtRealTimeLog.Location = New Point(392, 417)
+        txtRealTimeLog.Multiline = True
+        txtRealTimeLog.Name = "txtRealTimeLog"
+        txtRealTimeLog.ScrollBars = ScrollBars.Vertical
+        txtRealTimeLog.Size = New Size(421, 366)
+        txtRealTimeLog.TabIndex = 1
+        ' 
+        ' btnRemoveAllDoors
+        ' 
+        btnRemoveAllDoors.Location = New Point(996, 322)
+        btnRemoveAllDoors.Name = "btnRemoveAllDoors"
+        btnRemoveAllDoors.Size = New Size(130, 43)
+        btnRemoveAllDoors.TabIndex = 7
+        btnRemoveAllDoors.Text = "== 도어 삭제 =="
+        btnRemoveAllDoors.UseVisualStyleBackColor = True
+        ' 
+        ' btnGetDoorList
+        ' 
+        btnGetDoorList.Location = New Point(860, 322)
+        btnGetDoorList.Name = "btnGetDoorList"
+        btnGetDoorList.Size = New Size(130, 43)
+        btnGetDoorList.TabIndex = 7
+        btnGetDoorList.Text = "== 도어 리스트 =="
+        btnGetDoorList.UseVisualStyleBackColor = True
+        ' 
+        ' txtDoorList
+        ' 
+        txtDoorList.BackColor = Color.White
+        txtDoorList.Location = New Point(860, 371)
+        txtDoorList.Multiline = True
+        txtDoorList.Name = "txtDoorList"
+        txtDoorList.ReadOnly = True
+        txtDoorList.ScrollBars = ScrollBars.Vertical
+        txtDoorList.Size = New Size(266, 176)
+        txtDoorList.TabIndex = 1
+        ' 
+        ' btnDisableImageLog
+        ' 
+        btnDisableImageLog.Enabled = False
+        btnDisableImageLog.Location = New Point(665, 368)
+        btnDisableImageLog.Name = "btnDisableImageLog"
+        btnDisableImageLog.Size = New Size(148, 43)
+        btnDisableImageLog.TabIndex = 7
+        btnDisableImageLog.Text = "이미지 로그 비활성화"
+        btnDisableImageLog.UseVisualStyleBackColor = True
+        ' 
         ' Form1
         ' 
         AutoScaleDimensions = New SizeF(7.0F, 15.0F)
         AutoScaleMode = AutoScaleMode.Font
         ClientSize = New Size(1316, 795)
+        Controls.Add(btnGetDoorList)
+        Controls.Add(btnDisableImageLog)
+        Controls.Add(btnRemoveAllDoors)
+        Controls.Add(btnStartMonitoring)
+        Controls.Add(chkAllUserDel)
         Controls.Add(rbScanDevice)
         Controls.Add(rbLoadImage)
         Controls.Add(Label3)
         Controls.Add(Label2)
+        Controls.Add(Label4)
         Controls.Add(Label1)
         Controls.Add(lstDevices)
         Controls.Add(txtUserID)
@@ -270,6 +401,9 @@ Partial Class Form1
         Controls.Add(txtMemNm)
         Controls.Add(txtDeviceID)
         Controls.Add(txtPort)
+        Controls.Add(txtUserList)
+        Controls.Add(txtDoorList)
+        Controls.Add(txtRealTimeLog)
         Controls.Add(txtDeviceInfo)
         Controls.Add(txtIP)
         Controls.Add(btnGetDeviceInfo)
@@ -278,11 +412,15 @@ Partial Class Form1
         Controls.Add(btnDeviceConn)
         Controls.Add(btnDLLUnLoad)
         Controls.Add(btnTestImage)
-        Controls.Add(btnUpdateFace)
         Controls.Add(btnRemoveUser)
+        Controls.Add(btnUpdateFace)
+        Controls.Add(btnGetUserList)
+        Controls.Add(btnSetServerMode)
+        Controls.Add(btnSetDeviceMode)
         Controls.Add(btnEnrollUser)
         Controls.Add(btnDLLLoad)
         Name = "Form1"
+        StartPosition = FormStartPosition.CenterScreen
         Text = "Form1"
         ResumeLayout(False)
         PerformLayout()
@@ -309,7 +447,19 @@ Partial Class Form1
     Friend WithEvents rbLoadImage As RadioButton
     Friend WithEvents rbScanDevice As RadioButton
     Friend WithEvents btnTestImage As Button
-    Friend WithEvents btnRemoveUser As Button
+    Friend WithEvents btnSetDeviceMode As Button
     Friend WithEvents btnUpdateFace As Button
+    Friend WithEvents Label4 As Label
+    Friend WithEvents btnGetUserList As Button
+    Friend WithEvents txtUserList As TextBox
+    Friend WithEvents chkAllUserDel As CheckBox
+    Friend WithEvents btnSetServerMode As Button
+    Friend WithEvents btnRemoveUser As Button
+    Friend WithEvents btnStartMonitoring As Button
+    Friend WithEvents txtRealTimeLog As TextBox
+    Friend WithEvents btnRemoveAllDoors As Button
+    Friend WithEvents btnGetDoorList As Button
+    Friend WithEvents txtDoorList As TextBox
+    Friend WithEvents btnDisableImageLog As Button
 
 End Class
