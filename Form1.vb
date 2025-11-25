@@ -1078,6 +1078,7 @@ Public Class Form1
     ' Door ID가 없어도 릴레이를 직접 작동시킨다.
     ' relayIndex: 보통 0번이 1번 릴레이..
     ' deviceId: 장비 아이디
+    ' 
     Private Sub OpenRelay(deviceId As UInteger, relayIndex As Integer)
 
         Dim action As New BS2Action()
@@ -1126,14 +1127,14 @@ Public Class Form1
 
         If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
-        ' 도어설정을 삭제해야 수동으로 접점신호를 주는게 가능하다????
-        'Dim confirm = MessageBox.Show("장치에 설정된 도어정보가 모두 삭제됨!!!" & vbCrLf &
-        '                                "계속하시겠습니까?",
-        '                                "도어정보 전체 삭제",
-        '                                MessageBoxButtons.YesNo,
-        '                                MessageBoxIcon.Warning)
+        Dim confirm = MessageBox.Show("장치에 설정된 도어정보가 모두 삭제됨!!!" & vbCrLf &
+                                        "도어정보가 없으면 접점명령을 줄 수 없습니다." & vbCrLf &
+                                        "계속하시겠습니까?",
+                                        "도어정보 전체 삭제",
+                                        MessageBoxButtons.YesNo,
+                                        MessageBoxIcon.Warning)
 
-        'If confirm = DialogResult.No Then Return
+        If confirm = DialogResult.No Then Return
         Dim result As BS2ErrorCode = BS2_RemoveAllDoor(sdkContext, connectedDeviceId)
         If result = BS2ErrorCode.BS_SDK_SUCCESS Then
             MessageBox.Show("모든 도어정보 삭제완료!!")
@@ -1397,7 +1398,7 @@ Public Class Form1
         txtRealTimeLog.AppendText(">> 장비 인증후 유저아이디 넘겨받아 도어접점하는 모드 준비 완료." & vbCrLf)
 
     End Sub
-    ' [Global APB 핸들러] 장비가 "이 ID 들여보낼까요?" 하고 물어볼 때 호출됨
+    ' 장비가 유저아이디를 넘겨줄 때 이 함수가 호출된다.
     Private Sub HandleGlobalAPB(deviceId As UInteger, seq As UShort, userID_1 As String, userID_2 As String, isDualAuth As Boolean)
 
         Dim responseResult As Integer
@@ -1411,7 +1412,11 @@ Public Class Form1
             Me.BeginInvoke(Sub() txtRealTimeLog.AppendText($">> [승인] ID:{userID_1} - 문 열림 명령 전송" & vbCrLf))
 
             Task.Run(Sub()
-                         UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)  -- 릴레이 접점 신호 안남....
+
+                         'System.Threading.Thread.Sleep(10000)  ' 10초
+                         '10초가 지나든 몇초가 지나든 장비가 켜져있으면 무조건 접점신호는 튀긴다..(테스트결과)
+
+                         UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)  -- 접점신호 정상
                          'OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..  -- 릴레이 접점 신호 안남....
                          'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기  -- 릴레이 접점 신호 안남....
                          'TestBuzzer_HardCoded(deviceId)  ' 테스트용으로 부저음 울리기 (하드코딩 버전))  -- 릴레이 접점 신호 안남....
@@ -1431,8 +1436,6 @@ Public Class Form1
 
         If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
-
-
         ' 도어 정보 설정 (ID: 1, 릴레이: 0번)
         Dim doorId As UInteger = 1
         Dim relayIndex As Integer = 0
@@ -1440,9 +1443,9 @@ Public Class Form1
         Dim door As New BS2Door()
         door.doorID = doorId
 
-        ' 이름 설정 ("Door 1")
+        ' 도어 이름 설정
         door.name = New Byte(BS2Environment.BS2_MAX_DOOR_NAME_LEN - 1) {}
-        Dim nameBytes = System.Text.Encoding.UTF8.GetBytes("Door 1")
+        Dim nameBytes = System.Text.Encoding.UTF8.GetBytes("Door 1")   ' 도어이름 : Door 1
         Array.Copy(nameBytes, door.name, Math.Min(nameBytes.Length, door.name.Length))
 
         ' 릴레이 연결 설정
@@ -1503,20 +1506,15 @@ Public Class Form1
             ptrDoor = Marshal.AllocHGlobal(sizeDoor)
             Marshal.StructureToPtr(door, ptrDoor, False)
 
-            ' SetDoor 호출 (문 1개만 설정한다..)
             Dim result As BS2ErrorCode = API.BS2_SetDoor(sdkContext, connectedDeviceId, ptrDoor, 1)
-
             If result = BS2ErrorCode.BS_SDK_SUCCESS Then
                 MessageBox.Show($"도어(ID:{doorId}) 등록 완료!")
-
-                ' 로그창에도 기록
                 If txtRealTimeLog IsNot Nothing Then
                     txtRealTimeLog.AppendText($">> [설정] 도어 등록 완료 (ID: {doorId}, Relay: {relayIndex})" & vbCrLf)
                 End If
             Else
                 MessageBox.Show($"도어 등록 실패. 오류 코드: {result}")
             End If
-
         Finally
             If ptrDoor <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrDoor)
         End Try
