@@ -57,6 +57,10 @@ Partial Class Form1
         btnGetDoorList = New Button()
         txtDoorList = New TextBox()
         btnDisableImageLog = New Button()
+        btnCheckConfig = New Button()
+        btnDeepClean = New Button()
+        btnSetGlobalAPB = New Button()
+        btnSetDoor = New Button()
         SuspendLayout()
         ' 
         ' btnDLLLoad
@@ -90,9 +94,9 @@ Partial Class Form1
         ' 
         btnGetDeviceInfo.Location = New Point(860, 24)
         btnGetDeviceInfo.Name = "btnGetDeviceInfo"
-        btnGetDeviceInfo.Size = New Size(444, 44)
+        btnGetDeviceInfo.Size = New Size(266, 44)
         btnGetDeviceInfo.TabIndex = 0
-        btnGetDeviceInfo.Text = "3. 장치 세팅정보 가져오기"
+        btnGetDeviceInfo.Text = "3. 장치 세팅정보 확인"
         btnGetDeviceInfo.UseVisualStyleBackColor = True
         ' 
         ' txtIP
@@ -141,7 +145,7 @@ Partial Class Form1
         ' 
         ' btnDLLUnLoad
         ' 
-        btnDLLUnLoad.Location = New Point(1150, 739)
+        btnDLLUnLoad.Location = New Point(1174, 739)
         btnDLLUnLoad.Name = "btnDLLUnLoad"
         btnDLLUnLoad.Size = New Size(130, 44)
         btnDLLUnLoad.TabIndex = 0
@@ -249,11 +253,11 @@ Partial Class Form1
         ' 
         ' btnSetDeviceMode
         ' 
-        btnSetDeviceMode.Location = New Point(391, 322)
+        btnSetDeviceMode.Location = New Point(391, 321)
         btnSetDeviceMode.Name = "btnSetDeviceMode"
-        btnSetDeviceMode.Size = New Size(208, 44)
+        btnSetDeviceMode.Size = New Size(423, 42)
         btnSetDeviceMode.TabIndex = 0
-        btnSetDeviceMode.Text = "== 장비 인증 모드로 세팅하기 =="
+        btnSetDeviceMode.Text = "장비 인증 모드로 세팅하기 (장비자체에 얼굴있으면 무조건 도어접점)"
         btnSetDeviceMode.UseVisualStyleBackColor = True
         ' 
         ' btnUpdateFace
@@ -305,11 +309,11 @@ Partial Class Form1
         ' 
         ' btnSetServerMode
         ' 
-        btnSetServerMode.Location = New Point(605, 322)
+        btnSetServerMode.Location = New Point(390, 411)
         btnSetServerMode.Name = "btnSetServerMode"
-        btnSetServerMode.Size = New Size(208, 44)
+        btnSetServerMode.Size = New Size(423, 42)
         btnSetServerMode.TabIndex = 0
-        btnSetServerMode.Text = "== 서버 인증 모드로 세팅하기 =="
+        btnSetServerMode.Text = "서버 인증 모드로 세팅하기 (장비에서 인증후 서버에서 판단후 도어접점)     (장비가 얼굴템플릿을 넘겨줌 - 개발불가)"
         btnSetServerMode.UseVisualStyleBackColor = True
         ' 
         ' btnRemoveUser
@@ -323,7 +327,8 @@ Partial Class Form1
         ' 
         ' btnStartMonitoring
         ' 
-        btnStartMonitoring.Location = New Point(391, 368)
+        btnStartMonitoring.Enabled = False
+        btnStartMonitoring.Location = New Point(390, 459)
         btnStartMonitoring.Name = "btnStartMonitoring"
         btnStartMonitoring.Size = New Size(268, 43)
         btnStartMonitoring.TabIndex = 6
@@ -333,11 +338,11 @@ Partial Class Form1
         ' txtRealTimeLog
         ' 
         txtRealTimeLog.BackColor = Color.White
-        txtRealTimeLog.Location = New Point(392, 417)
+        txtRealTimeLog.Location = New Point(390, 508)
         txtRealTimeLog.Multiline = True
         txtRealTimeLog.Name = "txtRealTimeLog"
         txtRealTimeLog.ScrollBars = ScrollBars.Vertical
-        txtRealTimeLog.Size = New Size(421, 366)
+        txtRealTimeLog.Size = New Size(421, 275)
         txtRealTimeLog.TabIndex = 1
         ' 
         ' btnRemoveAllDoors
@@ -372,12 +377,48 @@ Partial Class Form1
         ' btnDisableImageLog
         ' 
         btnDisableImageLog.Enabled = False
-        btnDisableImageLog.Location = New Point(665, 368)
+        btnDisableImageLog.Location = New Point(665, 459)
         btnDisableImageLog.Name = "btnDisableImageLog"
         btnDisableImageLog.Size = New Size(148, 43)
         btnDisableImageLog.TabIndex = 7
         btnDisableImageLog.Text = "이미지 로그 비활성화"
         btnDisableImageLog.UseVisualStyleBackColor = True
+        ' 
+        ' btnCheckConfig
+        ' 
+        btnCheckConfig.Location = New Point(1132, 25)
+        btnCheckConfig.Name = "btnCheckConfig"
+        btnCheckConfig.Size = New Size(172, 43)
+        btnCheckConfig.TabIndex = 7
+        btnCheckConfig.Text = "장치 인증 설정 확인"
+        btnCheckConfig.UseVisualStyleBackColor = True
+        ' 
+        ' btnDeepClean
+        ' 
+        btnDeepClean.Location = New Point(1039, 740)
+        btnDeepClean.Name = "btnDeepClean"
+        btnDeepClean.Size = New Size(129, 43)
+        btnDeepClean.TabIndex = 7
+        btnDeepClean.Text = "장치 재부팅"
+        btnDeepClean.UseVisualStyleBackColor = True
+        ' 
+        ' btnSetGlobalAPB
+        ' 
+        btnSetGlobalAPB.Location = New Point(390, 365)
+        btnSetGlobalAPB.Name = "btnSetGlobalAPB"
+        btnSetGlobalAPB.Size = New Size(423, 42)
+        btnSetGlobalAPB.TabIndex = 0
+        btnSetGlobalAPB.Text = "복합 인증 모드로 세팅하기 (장비에서 인증후 서버에서 판단후 도어접점)       (장비가 UserID를 넘겨줌 - 개발가능)"
+        btnSetGlobalAPB.UseVisualStyleBackColor = True
+        ' 
+        ' btnSetDoor
+        ' 
+        btnSetDoor.Location = New Point(1132, 322)
+        btnSetDoor.Name = "btnSetDoor"
+        btnSetDoor.Size = New Size(130, 43)
+        btnSetDoor.TabIndex = 7
+        btnSetDoor.Text = "== 도어 등록 =="
+        btnSetDoor.UseVisualStyleBackColor = True
         ' 
         ' Form1
         ' 
@@ -386,6 +427,9 @@ Partial Class Form1
         ClientSize = New Size(1316, 795)
         Controls.Add(btnGetDoorList)
         Controls.Add(btnDisableImageLog)
+        Controls.Add(btnDeepClean)
+        Controls.Add(btnCheckConfig)
+        Controls.Add(btnSetDoor)
         Controls.Add(btnRemoveAllDoors)
         Controls.Add(btnStartMonitoring)
         Controls.Add(chkAllUserDel)
@@ -415,6 +459,7 @@ Partial Class Form1
         Controls.Add(btnRemoveUser)
         Controls.Add(btnUpdateFace)
         Controls.Add(btnGetUserList)
+        Controls.Add(btnSetGlobalAPB)
         Controls.Add(btnSetServerMode)
         Controls.Add(btnSetDeviceMode)
         Controls.Add(btnEnrollUser)
@@ -461,5 +506,9 @@ Partial Class Form1
     Friend WithEvents btnGetDoorList As Button
     Friend WithEvents txtDoorList As TextBox
     Friend WithEvents btnDisableImageLog As Button
+    Friend WithEvents btnCheckConfig As Button
+    Friend WithEvents btnDeepClean As Button
+    Friend WithEvents btnSetGlobalAPB As Button
+    Friend WithEvents btnSetDoor As Button
 
 End Class

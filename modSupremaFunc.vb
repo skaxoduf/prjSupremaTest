@@ -14,29 +14,27 @@ Module modSupremaFunc
         End If
         Return True
     End Function
-
-    ' useServerMatching: 1(서버 인증), 0(장비 인증)
     Public Sub SetServerMatchingMode(sdkContext As IntPtr, deviceId As UInteger, useServer As Byte)
 
-        ' 1. 현재 인증 설정 가져오기
         Dim authConfig As BS2AuthConfig
         Dim result As BS2ErrorCode = API.BS2_GetAuthConfig(sdkContext, deviceId, authConfig)
-
         If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
             MessageBox.Show($"설정 조회 실패: {result}")
             Return
         End If
 
-        ' 2. 모드 변경 (0: 장비 자체 인증, 1: 서버 인증)
+        ' 모드 변경 (0: 장비 자체 인증, 1: 서버 인증)
         authConfig.useServerMatching = useServer
+        If useServer = 0 Then  ' 장비인증모드
+            ' 장비인증 모드일때는 이걸 0으로해야 장비가 자체적으로 인증해서 인증성공 메시지를 바로 표시해준다. 
+            ' 이걸 1로하면은 장치에서 인증성공 메시지를 3초~4초후에 표시해준다. 그 이유는 문 열어줘도돼? 라고 서버에 물어보고 응답이 3~4초간 없으면 그때 인증성공 하기때문..
+            ' 서버인증 모드일때는 이 값이 0이든 1이든 아무 상관없다. 
+            authConfig.useGlobalAPB = 0
+        End If
 
-        ' 3. 설정 적용
+        ' 설정 적용
         result = API.BS2_SetAuthConfig(sdkContext, deviceId, authConfig)
-
-        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
-            Dim modeStr As String = If(useServer = 1, "서버 인증(Server Matching)", "장비 자체 인증(Device Matching)")
-            MessageBox.Show($"[{modeStr}] 모드로 변경되었습니다.")
-        Else
+        If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
             MessageBox.Show($"설정 변경 실패: {result}")
         End If
 
@@ -54,7 +52,7 @@ Module modSupremaFunc
 
         Try
             Marshal.Copy(rawImageBytes, 0, ptrRawImage, rawImageBytes.Length)
-            ' 정규화 수행  (각도가 안맞거나 얼굴이 기울어진 경우 자동으로 보정해주는거..)
+            ' 정규화 수행  (BS2_GetNormalizedImageFaceEx : 각도가 안맞거나 얼굴이 기울어진 경우 자동으로 보정해주는거..)
             Dim result As BS2ErrorCode = API.BS2_GetNormalizedImageFaceEx(sdkContext, deviceId, ptrRawImage, CUInt(rawImageBytes.Length), ptrWarpedImage, warpedLen)
 
             If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
@@ -97,7 +95,7 @@ Module modSupremaFunc
 
         Try
             Marshal.Copy(rawImageBytes, 0, ptrRawImage, rawImageBytes.Length)
-            ' 정규화 수행 (각도가 안맞거나 얼굴이 기울어진 경우 자동으로 보정해주는거..)
+            ' 정규화 수행 (BS2_GetNormalizedImageFaceEx : 각도가 안맞거나 얼굴이 기울어진 경우 자동으로 보정해주는거..)
             Dim result As BS2ErrorCode = API.BS2_GetNormalizedImageFaceEx(sdkContext, deviceId, ptrRawImage, CUInt(rawImageBytes.Length), ptrWarpedImage, warpedLen)
             If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
                 MessageBox.Show($"[1단계 실패] 얼굴 정규화 실패.{vbCrLf}오류: {result} ({CInt(result)})")
