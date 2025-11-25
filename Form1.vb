@@ -268,89 +268,135 @@ Public Class Form1
 
     Private Sub btnGetDeviceInfo_Click(sender As Object, e As EventArgs) Handles btnGetDeviceInfo.Click
 
-        '장치와 연결이 완료되었다면 장치 정보를 가져와야 합니다.
-        '장치 종류에 따라 일부 기능이 지원되지 않기 때문에 BioStar 애플리케이션은 장치에 맞춰 UI를 구성해야 합니다.
-        '1) 장치 정보를 가져오기 위해서는 BS2_GetDeviceInfo 함수를 사용합니다.
-
-        ' sdkContext : &H00000197843CCB90  정상이라는 뜻 
-        If sdkContext = IntPtr.Zero Then
-            MessageBox.Show("먼저 SDK 초기화를 실행하세요.")
-            Return
-        End If
+        ' 장비 세팅정보 불러오기
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
         txtDeviceInfo.Clear()
+        txtDeviceInfo.AppendText("=== [장비 종합 상태 점검 시작] ===" & vbCrLf)
+        Application.DoEvents()
 
-        Dim selectedDeviceId As UInteger = 0
-        If String.IsNullOrWhiteSpace(txtDeviceID.Text) Then
-            MessageBox.Show("장치 ID가 입력되지 않았습니다. 먼저 장치를 연결해주세요.")
-            txtDeviceID.Focus()
-            txtDeviceID.SelectAll()
-            Return
-        End If
-        If Not UInteger.TryParse(txtDeviceID.Text.Trim(), selectedDeviceId) Then
-            MessageBox.Show("장치 ID는 숫자여야 합니다.")
-            txtDeviceID.Focus()
-            txtDeviceID.SelectAll()
-            Return
-        End If
-        selectedDeviceId = txtDeviceID.Text.Trim
+        Dim sb As New System.Text.StringBuilder()
+        Dim result As BS2ErrorCode
 
+        ' =========================================================
+        ' 하드웨어 기본 정보 (BS2_GetDeviceInfo)
+        ' =========================================================
         Dim deviceInfo As BS2SimpleDeviceInfo
-        Dim getInfoResult As BS2ErrorCode = BS2_GetDeviceInfo(sdkContext, selectedDeviceId, deviceInfo)
+        result = API.BS2_GetDeviceInfo(sdkContext, connectedDeviceId, deviceInfo)
 
-        If getInfoResult = BS2ErrorCode.BS_SDK_SUCCESS Then
+        sb.AppendLine(vbCrLf & "== 1. 기본 하드웨어 정보")
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            sb.AppendLine($" - Device ID: {deviceInfo.id}")
 
-            Dim infoString As New Text.StringBuilder
-            infoString.AppendLine("장치 정보 가져오기 성공!")
-            infoString.AppendLine("--------------------------")
-            infoString.AppendLine($"Device ID: {deviceInfo.id}")
-
-            Dim deviceType As BS2DeviceTypeEnum = deviceInfo.type
-            Dim deviceName = "Unknown"
-            If productNameDictionary.ContainsKey(deviceType) Then
-                deviceName = productNameDictionary(deviceType)
+            Dim deviceType As BS2DeviceTypeEnum = CType(deviceInfo.type, BS2DeviceTypeEnum)
+            Dim deviceName As String = "Unknown"
+            If API.productNameDictionary.ContainsKey(deviceType) Then
+                deviceName = API.productNameDictionary(deviceType)
             End If
-            infoString.AppendLine($"Device Type: {deviceName} (Enum: {deviceInfo.type})")
-
-            Dim ip = New IPAddress(BitConverter.GetBytes(deviceInfo.ipv4Address)).ToString
-            infoString.AppendLine($"IP Address: {ip}")
-            infoString.AppendLine($"Port: {deviceInfo.port}")
-            infoString.AppendLine($"Max Users: {deviceInfo.maxNumOfUser}")
-            infoString.AppendLine($"Fingerprint Supported: {Convert.ToBoolean(deviceInfo.fingerSupported)}")
-            infoString.AppendLine($"Old Face Supported: {Convert.ToBoolean(deviceInfo.faceSupported)}")
-            infoString.AppendLine($"Card Supported: {Convert.ToBoolean(deviceInfo.cardSupported)}")
-            infoString.AppendLine($"PIN Supported: {Convert.ToBoolean(deviceInfo.pinSupported)}")
-            infoString.AppendLine($"WLAN Supported: {Convert.ToBoolean(deviceInfo.wlanSupported)}")
-
-
-            ' 신형장비 스펙 조회 (BS2_GetDeviceCapabilities) - 여기서 나오는 값이 진짜 얼굴인식 지원여부 값이다.
-            Dim cap As New BS2DeviceCapabilities()
-            Dim capResult As BS2ErrorCode = API.BS2_GetDeviceCapabilities(sdkContext, selectedDeviceId, cap)
-
-            If capResult = BS2ErrorCode.BS_SDK_SUCCESS Then
-                infoString.AppendLine(vbCrLf & "=== 장비 상세 스펙2 ===")
-
-                Dim isFaceExSupported As Boolean = (cap.systemSupported And BS2CapabilitySystemSupport.SYSTEM_SUPPORT_FACEEX) > 0
-
-                infoString.AppendLine($"New Face Supported: {isFaceExSupported}")
-                infoString.AppendLine($"Max Users: {cap.maxUsers}")
-                infoString.AppendLine($"Max Faces: {cap.maxFaces}")
-
-                If isFaceExSupported Then
-                    infoString.AppendLine("=> 이 장치는 신형 얼굴 인식(FaceEx)을 지원합니다.")
-                ElseIf Convert.ToBoolean(deviceInfo.faceSupported) Then
-                    infoString.AppendLine("=> 이 장치는 구형 얼굴 인식(Face)을 지원합니다.")
-                Else
-                    infoString.AppendLine("=> 이 장치는 얼굴 인식을 지원하지 않습니다.")
-                End If
-            Else
-                infoString.AppendLine("상세 능력치 조회 실패: " & capResult.ToString())
-            End If
-            txtDeviceInfo.Text = infoString.ToString
+            sb.AppendLine($" - 모델명: {deviceName} (Type: {deviceInfo.type})")
+            sb.AppendLine($" - 접속 모드: {If(deviceInfo.connectionMode = 1, "장치 -> 서버 (Device to Server)", "서버 -> 장치 (Server to Device)")}")
+            sb.AppendLine($" - IP 주소: {New IPAddress(BitConverter.GetBytes(deviceInfo.ipv4Address))}")
+            sb.AppendLine($" - 포트: {deviceInfo.port}")
         Else
-            txtDeviceInfo.Text = $"장치 정보 가져오기 실패. (ID: {selectedDeviceId})" & vbCrLf
-            txtDeviceInfo.AppendText("오류 코드: 0x" & getInfoResult.ToString("X"))
+            sb.AppendLine($" [조회 실패] 오류 코드: {result}")
         End If
+
+        ' =========================================================
+        ' 장비 능력치 (BS2_GetDeviceCapabilities)
+        ' =========================================================
+        Dim cap As New BS2DeviceCapabilities()
+        result = API.BS2_GetDeviceCapabilities(sdkContext, connectedDeviceId, cap)
+
+        sb.AppendLine(vbCrLf & "== 2. 장비 능력치 (기능 지원 여부)")
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            ' Visual Face 지원 여부 확인 (비트 연산)
+            Dim isFaceEx As Boolean = (cap.systemSupported And BS2CapabilitySystemSupport.SYSTEM_SUPPORT_FACEEX) > 0
+
+            sb.AppendLine($" - 신형 얼굴인식(Visual Face) 지원: {isFaceEx}")
+            sb.AppendLine($" - 구형 얼굴인식(IR Face) 지원: {Convert.ToBoolean(deviceInfo.faceSupported)}")
+            sb.AppendLine($" - 최대 사용자 수: {cap.maxUsers:N0} 명")
+            sb.AppendLine($" - 최대 얼굴 템플릿 수: {cap.maxFaces:N0} 개")
+            sb.AppendLine($" - 최대 로그 저장 수: {cap.maxEventLogs:N0} 개")
+        Else
+            sb.AppendLine($" [조회 실패] 오류 코드: {result}")
+        End If
+
+        ' =========================================================
+        ' 인증/운영 설정 (BS2_GetAuthConfig) 
+        ' =========================================================
+        Dim authConfig As New BS2AuthConfig()
+        result = API.BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfig)
+
+        sb.AppendLine(vbCrLf & "== 3. 인증 설정 (운영 모드)")
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            sb.AppendLine($" - 서버 매칭 모드 (useServerMatching): {authConfig.useServerMatching}")
+            If authConfig.useServerMatching = 1 Then
+                sb.AppendLine("   => [주의] 1 (서버 인증): 장비가 서버 응답을 기다립니다. (매칭 엔진 없으면 0이어야 함)")
+            Else
+                sb.AppendLine("   => [정상] 0 (장비 인증): 장비가 스스로 인증합니다.")
+            End If
+
+            sb.AppendLine($" - 전역 APB (useGlobalAPB): {authConfig.useGlobalAPB}")
+            If authConfig.useGlobalAPB = 1 Then
+                sb.AppendLine("   => [확인] 1 (서버 확인): 인증 후 서버에 출입 권한을 물어봅니다. (권한 제어 시 필요)")
+            Else
+                sb.AppendLine("   => [확인] 0 (즉시 통과): 서버 확인 없이 즉시 통과시킵니다.")
+            End If
+        Else
+            sb.AppendLine($" [조회 실패] 오류 코드: {result}")
+        End If
+
+        ' =========================================================
+        ' 이벤트/로그 설정 (BS2_GetEventConfig) 
+        ' =========================================================
+        Dim eventConfig As New BS2EventConfig()
+        ' 배열 초기화 (필수)
+        eventConfig.imageEventFilter = New BS2ImageEventFilter(BS2Environment.BS2_EVENT_MAX_IMAGE_CODE_COUNT - 1) {}
+
+        result = API.BS2_GetEventConfig(sdkContext, connectedDeviceId, eventConfig)
+
+        sb.AppendLine(vbCrLf & "== 4. 이벤트 설정 (이미지 로그)")
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            sb.AppendLine($" - 이미지 전송 필터 개수: {eventConfig.numImageEventFilter}")
+            If eventConfig.numImageEventFilter > 0 Then
+                sb.AppendLine("   => [주의] 켜짐: 대용량 사진을 전송하느라 릴레이 반응이 느려질 수 있습니다.")
+            Else
+                sb.AppendLine("   => [정상] 꺼짐: 텍스트 로그만 전송하여 반응 속도가 빠릅니다.")
+            End If
+        Else
+            sb.AppendLine($" [조회 실패] 오류 코드: {result}")
+        End If
+
+        ' =========================================================
+        ' 상태 설정 (BS2_GetStatusConfig) 
+        ' =========================================================
+        Dim statusConfig As New BS2StatusConfig()
+        ' 배열 초기화 (필수)
+        statusConfig.led = New BS2LedStatusConfig(BS2Environment.BS2_DEVICE_STATUS_NUM - 1) {}
+        statusConfig.buzzer = New BS2BuzzerStatusConfig(BS2Environment.BS2_DEVICE_STATUS_NUM - 1) {}
+
+        result = API.BS2_GetStatusConfig(sdkContext, connectedDeviceId, statusConfig)
+
+        sb.AppendLine(vbCrLf & "== 5. 상태 설정 (소리/LED)")
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            ' 보통 0번 인덱스가 기본 동작
+            sb.AppendLine($" - LED 기능 사용 여부: {statusConfig.led(0).enabled}")
+
+            Dim buzzerOn As Byte = statusConfig.buzzer(0).enabled
+            sb.AppendLine($" - 부저(소리) 기능 사용 여부: {buzzerOn}")
+            If buzzerOn = 0 Then
+                sb.AppendLine("   => [주의] 부저 기능이 꺼져 있어 명령을 보내도 소리가 나지 않습니다.")
+            Else
+                sb.AppendLine("   => [정상] 부저 기능이 켜져 있습니다.")
+            End If
+        Else
+            sb.AppendLine($" [조회 실패] 오류 코드: {result}")
+        End If
+
+        ' 최종 출력
+        txtDeviceInfo.Text = sb.ToString()
+        txtDeviceInfo.SelectionStart = 0
+        txtDeviceInfo.ScrollToCaret()
 
     End Sub
 
@@ -888,8 +934,6 @@ Public Class Form1
     Private Sub btnSetDeviceMode_Click(sender As Object, e As EventArgs) Handles btnSetDeviceMode.Click
         If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
         SetServerMatchingMode(sdkContext, connectedDeviceId, 0)  ' 장비에서 인증 (장비에 얼굴등록되어있으면 문 열어주기)
-
-        btnStartMonitoring.Enabled = True '
         txtRealTimeLog.AppendText(">> 장비 인증후 장비가 알아서 도어접점하는 모드 준비 완료. (장비자체에 릴레이 설정 활성화 되어있어야함)" & vbCrLf)
     End Sub
 
@@ -1243,16 +1287,16 @@ Public Class Form1
         End If
     End Sub
 
-    Private Sub btnCheckConfig_Click(sender As Object, e As EventArgs) Handles btnCheckConfig.Click
+    Private Sub btnCheckConfig_Click(sender As Object, e As EventArgs)
 
-        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+        If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
-        Dim sb As New System.Text.StringBuilder()
+        Dim sb As New Text.StringBuilder
         sb.AppendLine("=== 장비 설정 상태 점검 ===")
 
         ' 1. 인증 설정 확인 (Global APB, Server Matching)
-        Dim authConfig As New BS2AuthConfig()
-        Dim resAuth As BS2ErrorCode = API.BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfig)
+        Dim authConfig As New BS2AuthConfig
+        Dim resAuth As BS2ErrorCode = BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfig)
 
         If resAuth = BS2ErrorCode.BS_SDK_SUCCESS Then
             sb.AppendLine($"[인증 설정]")
@@ -1271,11 +1315,11 @@ Public Class Form1
         sb.AppendLine("-----------------------------")
 
         ' 2. 이벤트 설정 확인 (Image Log)
-        Dim eventConfig As New BS2EventConfig()
+        Dim eventConfig As New BS2EventConfig
         ' (참고: 구조체 내 배열 초기화가 없으면 Get호출 시 에러날 수 있으므로 간단 초기화)
-        eventConfig.imageEventFilter = New BS2ImageEventFilter(BS2Environment.BS2_EVENT_MAX_IMAGE_CODE_COUNT - 1) {}
+        eventConfig.imageEventFilter = New BS2ImageEventFilter(BS2_EVENT_MAX_IMAGE_CODE_COUNT - 1) {}
 
-        Dim resEvent As BS2ErrorCode = API.BS2_GetEventConfig(sdkContext, connectedDeviceId, eventConfig)
+        Dim resEvent As BS2ErrorCode = BS2_GetEventConfig(sdkContext, connectedDeviceId, eventConfig)
 
         If resEvent = BS2ErrorCode.BS_SDK_SUCCESS Then
             sb.AppendLine($"[이벤트 설정]")
@@ -1289,7 +1333,7 @@ Public Class Form1
         Else
             sb.AppendLine($"[이벤트 설정] 조회 실패: {resEvent}")
         End If
-        txtDeviceInfo.Text = sb.ToString()
+        txtDeviceInfo.Text = sb.ToString
 
     End Sub
 
@@ -1434,17 +1478,17 @@ Public Class Form1
 
     Private Sub btnSetDoor_Click(sender As Object, e As EventArgs) Handles btnSetDoor.Click
 
-        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+        If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
         ' 도어 정보 설정 (ID: 1, 릴레이: 0번)
         Dim doorId As UInteger = 1
-        Dim relayIndex As Integer = 0
+        Dim relayIndex = 0
 
-        Dim door As New BS2Door()
+        Dim door As New BS2Door
         door.doorID = doorId
 
         ' 도어 이름 설정
-        door.name = New Byte(BS2Environment.BS2_MAX_DOOR_NAME_LEN - 1) {}
+        door.name = New Byte(BS2_MAX_DOOR_NAME_LEN - 1) {}
         Dim nameBytes = System.Text.Encoding.UTF8.GetBytes("Door 1")   ' 도어이름 : Door 1
         Array.Copy(nameBytes, door.name, Math.Min(nameBytes.Length, door.name.Length))
 
@@ -1454,9 +1498,9 @@ Public Class Form1
         door.relay.reserved = New Byte(2) {}
 
         ' 기타 필수 배열 초기화
-        door.sensor = New BS2DoorSensor()
+        door.sensor = New BS2DoorSensor
         door.sensor.reserved = New Byte(0) {}
-        door.button = New BS2ExitButton()
+        door.button = New BS2ExitButton
         door.button.reserved = New Byte(1) {}
 
         ' 도어 옵션 설정
@@ -1468,11 +1512,11 @@ Public Class Form1
         door.unconditionalLock = 0
 
         ' 알람 액션 배열 초기화
-        door.forcedOpenAlarm = New BS2Action(BS2Environment.BS2_MAX_FORCED_OPEN_ALARM_ACTION - 1) {}
+        door.forcedOpenAlarm = New BS2Action(BS2_MAX_FORCED_OPEN_ALARM_ACTION - 1) {}
         For i = 0 To door.forcedOpenAlarm.Length - 1
             door.forcedOpenAlarm(i).actionUnion = New Byte(31) {}
         Next
-        door.heldOpenAlarm = New BS2Action(BS2Environment.BS2_MAX_HELD_OPEN_ALARM_ACTION - 1) {}
+        door.heldOpenAlarm = New BS2Action(BS2_MAX_HELD_OPEN_ALARM_ACTION - 1) {}
         For i = 0 To door.heldOpenAlarm.Length - 1
             door.heldOpenAlarm(i).actionUnion = New Byte(31) {}
         Next
@@ -1480,33 +1524,33 @@ Public Class Form1
         ' 예비 공간 초기화
         door.reserved = New Byte(1) {}
         door.reserved2 = New Byte(2) {}
-        door.dualAuthApprovalGroupID = New UInteger(BS2Environment.BS2_MAX_DUAL_AUTH_APPROVAL_GROUP - 1) {}
+        door.dualAuthApprovalGroupID = New UInteger(BS2_MAX_DUAL_AUTH_APPROVAL_GROUP - 1) {}
 
         ' APB Zone 초기화
-        door.apbZone = New BS2AntiPassbackZone()
-        door.apbZone.name = New Byte(BS2Environment.BS2_MAX_ZONE_NAME_LEN - 1) {}
+        door.apbZone = New BS2AntiPassbackZone
+        door.apbZone.name = New Byte(BS2_MAX_ZONE_NAME_LEN - 1) {}
         door.apbZone.reserved = New Byte(2) {}
         door.apbZone.reserved2 = New Byte(511) {}
-        door.apbZone.bypassGroupIDs = New UInteger(BS2Environment.BS2_MAX_BYPASS_GROUPS_PER_APB_ZONE - 1) {}
-        door.apbZone.alarm = New BS2Action(BS2Environment.BS2_MAX_APB_ALARM_ACTION - 1) {}
+        door.apbZone.bypassGroupIDs = New UInteger(BS2_MAX_BYPASS_GROUPS_PER_APB_ZONE - 1) {}
+        door.apbZone.alarm = New BS2Action(BS2_MAX_APB_ALARM_ACTION - 1) {}
         For i = 0 To door.apbZone.alarm.Length - 1
             door.apbZone.alarm(i).actionUnion = New Byte(31) {}
         Next
-        door.apbZone.readers = New BS2ApbMember(BS2Environment.BS2_MAX_READERS_PER_APB_ZONE - 1) {}
+        door.apbZone.readers = New BS2ApbMember(BS2_MAX_READERS_PER_APB_ZONE - 1) {}
         For i = 0 To door.apbZone.readers.Length - 1
             door.apbZone.readers(i).reserved = New Byte(2) {}
         Next
 
 
         ' 도어정보를 장비에 등록하기
-        Dim ptrDoor As IntPtr = IntPtr.Zero
+        Dim ptrDoor = IntPtr.Zero
 
         Try
-            Dim sizeDoor As Integer = Marshal.SizeOf(GetType(BS2Door))
+            Dim sizeDoor = Marshal.SizeOf(GetType(BS2Door))
             ptrDoor = Marshal.AllocHGlobal(sizeDoor)
             Marshal.StructureToPtr(door, ptrDoor, False)
 
-            Dim result As BS2ErrorCode = API.BS2_SetDoor(sdkContext, connectedDeviceId, ptrDoor, 1)
+            Dim result As BS2ErrorCode = BS2_SetDoor(sdkContext, connectedDeviceId, ptrDoor, 1)
             If result = BS2ErrorCode.BS_SDK_SUCCESS Then
                 MessageBox.Show($"도어(ID:{doorId}) 등록 완료!")
                 If txtRealTimeLog IsNot Nothing Then
@@ -1520,4 +1564,5 @@ Public Class Form1
         End Try
 
     End Sub
+
 End Class

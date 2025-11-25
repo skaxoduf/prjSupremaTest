@@ -57,7 +57,6 @@ Partial Class Form1
         btnGetDoorList = New Button()
         txtDoorList = New TextBox()
         btnDisableImageLog = New Button()
-        btnCheckConfig = New Button()
         btnDeepClean = New Button()
         btnSetGlobalAPB = New Button()
         btnSetDoor = New Button()
@@ -94,7 +93,7 @@ Partial Class Form1
         ' 
         btnGetDeviceInfo.Location = New Point(860, 24)
         btnGetDeviceInfo.Name = "btnGetDeviceInfo"
-        btnGetDeviceInfo.Size = New Size(266, 44)
+        btnGetDeviceInfo.Size = New Size(176, 44)
         btnGetDeviceInfo.TabIndex = 0
         btnGetDeviceInfo.Text = "3. 장치 세팅정보 확인"
         btnGetDeviceInfo.UseVisualStyleBackColor = True
@@ -327,7 +326,6 @@ Partial Class Form1
         ' 
         ' btnStartMonitoring
         ' 
-        btnStartMonitoring.Enabled = False
         btnStartMonitoring.Location = New Point(390, 459)
         btnStartMonitoring.Name = "btnStartMonitoring"
         btnStartMonitoring.Size = New Size(268, 43)
@@ -384,15 +382,6 @@ Partial Class Form1
         btnDisableImageLog.Text = "이미지 로그 비활성화"
         btnDisableImageLog.UseVisualStyleBackColor = True
         ' 
-        ' btnCheckConfig
-        ' 
-        btnCheckConfig.Location = New Point(1132, 25)
-        btnCheckConfig.Name = "btnCheckConfig"
-        btnCheckConfig.Size = New Size(172, 43)
-        btnCheckConfig.TabIndex = 7
-        btnCheckConfig.Text = "장치 인증 설정 확인"
-        btnCheckConfig.UseVisualStyleBackColor = True
-        ' 
         ' btnDeepClean
         ' 
         btnDeepClean.Location = New Point(1039, 740)
@@ -422,13 +411,12 @@ Partial Class Form1
         ' 
         ' Form1
         ' 
-        AutoScaleDimensions = New SizeF(7.0F, 15.0F)
+        AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
         ClientSize = New Size(1316, 795)
         Controls.Add(btnGetDoorList)
         Controls.Add(btnDisableImageLog)
         Controls.Add(btnDeepClean)
-        Controls.Add(btnCheckConfig)
         Controls.Add(btnSetDoor)
         Controls.Add(btnRemoveAllDoors)
         Controls.Add(btnStartMonitoring)
@@ -506,7 +494,6 @@ Partial Class Form1
     Friend WithEvents btnGetDoorList As Button
     Friend WithEvents txtDoorList As TextBox
     Friend WithEvents btnDisableImageLog As Button
-    Friend WithEvents btnCheckConfig As Button
     Friend WithEvents btnDeepClean As Button
     Friend WithEvents btnSetGlobalAPB As Button
     Friend WithEvents btnSetDoor As Button
