@@ -254,7 +254,7 @@ Partial Class Form1
         ' 
         btnSetDeviceMode.Location = New Point(391, 321)
         btnSetDeviceMode.Name = "btnSetDeviceMode"
-        btnSetDeviceMode.Size = New Size(423, 42)
+        btnSetDeviceMode.Size = New Size(422, 42)
         btnSetDeviceMode.TabIndex = 0
         btnSetDeviceMode.Text = "장비 인증 모드로 세팅하기 (장비자체에 얼굴있으면 무조건 도어접점)"
         btnSetDeviceMode.UseVisualStyleBackColor = True
@@ -347,9 +347,9 @@ Partial Class Form1
         ' 
         btnRemoveAllDoors.Location = New Point(996, 322)
         btnRemoveAllDoors.Name = "btnRemoveAllDoors"
-        btnRemoveAllDoors.Size = New Size(130, 43)
+        btnRemoveAllDoors.Size = New Size(137, 43)
         btnRemoveAllDoors.TabIndex = 7
-        btnRemoveAllDoors.Text = "== 도어 삭제 =="
+        btnRemoveAllDoors.Text = "== 도어 전체 삭제 =="
         btnRemoveAllDoors.UseVisualStyleBackColor = True
         ' 
         ' btnGetDoorList
@@ -402,7 +402,7 @@ Partial Class Form1
         ' 
         ' btnSetDoor
         ' 
-        btnSetDoor.Location = New Point(1132, 322)
+        btnSetDoor.Location = New Point(1139, 322)
         btnSetDoor.Name = "btnSetDoor"
         btnSetDoor.Size = New Size(130, 43)
         btnSetDoor.TabIndex = 7

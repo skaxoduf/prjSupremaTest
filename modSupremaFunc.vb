@@ -189,6 +189,56 @@ Module modSupremaFunc
 
     End Function
 
+    ' 1번도어 기본으로 등록후 무조건 도어아이디 1번으로 문 열라고 시키면 실제로 장치에서 접점이 먹는다.
+    Public Function UnlockDoor(sdkContext As IntPtr, deviceId As UInteger, targetDoorId As UInteger) As BS2ErrorCode
+        Dim ptrDoorIds As IntPtr = Marshal.AllocHGlobal(4)
+        Try
+            Marshal.WriteInt32(ptrDoorIds, CInt(targetDoorId))
+            ' BS2_UnlockDoor(Context, DeviceID, Flag, DoorIDs, DoorCount)
+            Return API.BS2_UnlockDoor(sdkContext, deviceId, BS2DoorFlagEnum.NONE, ptrDoorIds, 1)
+        Finally
+            Marshal.FreeHGlobal(ptrDoorIds)
+        End Try
+    End Function
+
+    ' 릴레이를 직접 작동시키는 함수 (Door ID 없이 제어)
+    ' relayIndex: 보통 0번이 1번 릴레이
+    ' 테스트해보면 실제 장치가 작동하지 않는다.  
+    Public Function OpenRelay(sdkContext As IntPtr, deviceId As UInteger, relayIndex As Integer) As BS2ErrorCode
+        Dim action As New BS2Action()
+        action.deviceID = deviceId
+        action.type = BS2ActionTypeEnum.RELAY
+        action.stopFlag = 0
+        action.delay = 0
+
+        ' 릴레이 액션 세부 설정
+        Dim relayAction As New BS2RelayAction()
+        relayAction.relayIndex = CByte(relayIndex)
+        relayAction.reserved = New Byte(2) {} ' 배열 초기화
+
+        ' 신호 설정 (3초간 켜짐)
+        relayAction.signal.signalID = 0
+        relayAction.signal.count = 1          ' 1번 작동
+        relayAction.signal.onDuration = 3000  ' 3000ms (3초) 켜짐
+        relayAction.signal.offDuration = 0
+        relayAction.signal.delay = 0
+
+        ' actionUnion 배열 할당 (넉넉하게 잡음)
+        action.actionUnion = New Byte(BS2Environment.BS2_MAX_TRIGGER_ACTION - 1) {}
+
+        Dim sizeRelay As Integer = Marshal.SizeOf(GetType(BS2RelayAction))
+        Dim ptrRelay As IntPtr = Marshal.AllocHGlobal(sizeRelay)
+
+        Try
+            Marshal.StructureToPtr(relayAction, ptrRelay, False)
+            Marshal.Copy(ptrRelay, action.actionUnion, 0, sizeRelay)
+
+            ' 장비에 액션 실행 명령 전송
+            Return API.BS2_RunAction(sdkContext, deviceId, action)
+        Finally
+            Marshal.FreeHGlobal(ptrRelay)
+        End Try
+    End Function
 
 
 

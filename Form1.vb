@@ -9,47 +9,27 @@ Imports Suprema.API
 Public Class Form1
 
     Private sdkContext As IntPtr = IntPtr.Zero  ' SDK 컨텍스트 핸들
-    Private connectedDeviceId As UInteger = 0   ' 연결된 장치 ID
+    Private connectedDeviceId As UInteger = 0   ' 연결된 장치 ID(장치 고유번호)
     Private cbOnLogReceived As API.OnLogReceived = Nothing   ' 장비 이벤트 받는 콜백함수 선언
-    Private cbOnVerifyUser As API.OnVerifyUser = Nothing     ' 1:1 인증용 (ID+얼굴)
-    Private cbOnIdentifyUser As API.OnIdentifyUser = Nothing ' 1:N 인증용 (얼굴만)
-    Private cbGlobalAPB As API.OnCheckGlobalAPBViolation = Nothing
+    Private cbOnVerifyUser As API.OnVerifyUser = Nothing     ' 1:1 인증용 (ID+얼굴)  ' 서버인증모드에서 사용하는 콜백함수 (대양프로그램은 사용안함)
+    Private cbOnIdentifyUser As API.OnIdentifyUser = Nothing ' 1:N 인증용 (얼굴만)   ' 서버인증모드에서 사용하는 콜백함수 (대양프로그램은 사용안함)
+    Private cbGlobalAPB As API.OnCheckGlobalAPBViolation = Nothing  ' 안티패스백 경보가 발생했을 때 글로벌 판정을 위한 콜백 함수입니다. (대양프로그램 사용)
 
-    <DllImport("BS_SDK_V2.dll", EntryPoint:="BS2_RunAction", CallingConvention:=CallingConvention.Cdecl)>
-    Private Shared Function BS2_RunAction_Safe(context As IntPtr, deviceId As UInteger, ByRef action As BS2Action) As Integer
-    End Function
-
-
-    '이 구조체는 오리지널 구조체가 복잡한 배열을 포함하고 있어 메모리 정렬 문제를 피하기 위해 단순화된 버전 (기본적으로 사용안함)
-    <StructLayout(LayoutKind.Sequential, Pack:=1)>
-    Public Structure BS2FaceExWarped_Safe
-        Public faceIndex As Byte
-        Public numOfTemplate As Byte
-        Public flag As Byte
-        Public reserved As Byte
-        Public imageLen As UInteger
-        Public irImageLen As UShort
-        <MarshalAs(UnmanagedType.ByValArray, SizeConst:=6)>
-        Public unused As Byte()
-        <MarshalAs(UnmanagedType.ByValArray, SizeConst:=BS2Environment.BS2_MAX_WARPED_IMAGE_LENGTH)>
-        Public imageData As Byte()
-        <MarshalAs(UnmanagedType.ByValArray, SizeConst:=BS2Environment.BS2_MAX_WARPED_IR_IMAGE_LENGTH)>
-        Public irImageData As Byte()
-        <MarshalAs(UnmanagedType.ByValArray, SizeConst:=11120)>
-        Public templateExBlob As Byte()
-    End Structure
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         UpdateImageUI()
     End Sub
+
     Private Sub rbLoadImage_CheckedChanged(sender As Object, e As EventArgs) Handles rbLoadImage.CheckedChanged
         UpdateImageUI()
     End Sub
+
     Private Sub UpdateImageUI()
         txtImagePath.Enabled = rbLoadImage.Checked
         If Not rbLoadImage.Checked Then
             txtImagePath.Clear()
         End If
     End Sub
+
     Private Sub txtImagePath_DragEnter(sender As Object, e As DragEventArgs) Handles txtImagePath.DragEnter
         If e.Data.GetDataPresent(DataFormats.FileDrop) Then
             e.Effect = DragDropEffects.Copy
@@ -57,6 +37,7 @@ Public Class Form1
             e.Effect = DragDropEffects.None
         End If
     End Sub
+
     Private Sub txtImagePath_DragDrop(sender As Object, e As DragEventArgs) Handles txtImagePath.DragDrop
         Dim files() As String = CType(e.Data.GetData(DataFormats.FileDrop), String())
         If files.Length > 0 Then
@@ -504,6 +485,70 @@ Public Class Form1
         txtDeviceInfo.Text = sb.ToString()
         txtDeviceInfo.SelectionStart = 0
         txtDeviceInfo.ScrollToCaret()
+
+
+        ' 실제로 이 세팅값이어야 운영할 수 있음.......
+        '== 1. 기본 하드웨어 정보
+        ' - Device ID: 538212289
+        ' - 모델명: BioStation 3(Type:35)
+        ' - 접속 모드: 서버 -> 장치
+        ' - IP 주소: 192.168.0.156
+        ' - 포트: 51211
+
+        '== 2. 장비 기능 지원 여부
+        ' - 신형 얼굴인식(Visual Face) 지원: True   -- 바이오스테이션에서 True로 나와야 사용가능..(젤 중요)
+        ' - 구형 얼굴인식(IR Face) 지원: False  -- 바이오스테이션이 아닌 옛날에 나온 구형장비에서 사용하는 옵션...바이오스테이션에서는 False로 나와도 상관없다.
+        ' - 최대 사용자 수: 100,000
+        ' - 최대 얼굴 템플릿 수: 100,000
+        ' - 최대 로그 저장 수: 5,000,000
+
+        '== 3. 인증 설정 (운영 모드)
+        ' - 서버 매칭 모드 (useServerMatching): 0
+        '   => [정상] 0 (장비 인증): 장비가 스스로 인증합니다.  -- 장비가 스스로 인증하게 설정하고 릴레이는 비활성화 시켜놓고
+        ' - 전역 APB (useGlobalAPB): 1
+        '   => [확인] 1 (서버 확인): 인증 후 서버에 출입 권한을 물어봅니다.  -- 전역 APB 설정값이 켜져 있어야 장비에서 안면들이댔을때 유저아이디가 날라온다.
+
+        '== 4. 이벤트 설정 (이미지 로그)   -- 필요없음
+        ' - 이미지 전송 필터 개수: 0
+        '   => [정상] 꺼짐: 텍스트 로그만 전송하여 반응 속도가 빠릅니다. 
+
+        '== 5. 상태 설정 (소리/LED)   -- 필요없음
+        ' - LED 기능 사용 여부: 1
+        ' - 부저(소리) 기능 사용 여부: 1
+        '   => [정상] 부저 기능이 켜져 있습니다.
+
+        '== 6. 시스템 설정 (System Config)   -- 필요없음
+        ' - 타임존(Timezone): 32400
+        ' - 카메라 주파수(Camera Freq): 2 Hz
+        ' - 보안 탬퍼(Secure Tamper): 0
+        ' - 카드 동작 마스크: 2147496757
+
+        '== 7. 공장 초기 정보 (Factory Config)
+        ' - MAC Address: 00-17-FC-14-77-C1
+        ' - 모델명: BS3-DB
+        ' - 펌웨어 버전: v100.2.1 (Build:   2023/11/13 12:43:42)
+
+        '== 8. 디스플레이 설정 (Display Config)
+        ' - 볼륨(Volume): 20  -- 볼륨 최대값 100(적당하게 조절해서 사용)
+        ' - 배경 테마: 0
+        ' - 메뉴 타임아웃: 20초
+        ' - 화면보호기 사용: 1
+
+        '== 9. 얼굴 설정 (Face Config)
+        ' - 보안 등급(Security Level): 0
+        ' - 조명 조건(Light Condition): 0
+        ' - 등록 임계값(Enroll Threshold): 4
+        ' - 감지 민감도(Detect Sensitivity): 2
+        ' - LFD(가짜 얼굴 감지) 레벨: 1
+
+        '== 10. IP 설정 (IP Config)
+        ' - DHCP 사용: 1
+        ' - IP Addr: 192.168.0.156
+        ' - Gateway: 192.168.0.1
+        ' - Subnet: 255.255.255.0
+        ' - Server IP: 
+        ' - Server Port 51212
+
 
     End Sub
 
@@ -1046,7 +1091,6 @@ Public Class Form1
         If isDbCheckPassed Then
             responseResult = BS2ErrorCode.BS_SDK_SUCCESS
             API.BS2_IdentifyUser(sdkContext, deviceId, seq, responseResult, userBlob)
-
             Task.Run(Sub()
                          OpenRelay(deviceId, 0)
                          Me.BeginInvoke(Sub() txtRealTimeLog.AppendText($">> [서버인증 승인] 문 열림 명령 전송 ({tempUserId})" & vbCrLf))
@@ -1143,11 +1187,6 @@ Public Class Form1
                       Dim isFaceSuccess As Boolean = (eventCode = BS2EventCodeEnum.IDENTIFY_SUCCESS_FACE)
                       ' 장비에서 얼굴 인증 성공 이벤트인 경우에만 문 열기 시도
                       If isFaceSuccess Then
-
-                          ' 문 열지 말지 결정하는 부분 
-                          ' 게이트데몬에서 api 호출하는 부분 코딩해야함..
-
-
 
                           If userId = "1234" Then
                               txtRealTimeLog.AppendText(">> [문을 연다] 얼굴 인증 성공 & ID 1234 확인됨!" & vbCrLf)
@@ -1461,7 +1500,6 @@ Public Class Form1
         If Not modSupremaFunc.IsDeviceConnected(sdkContext, deviceId) Then Return
 
         Dim config As New BS2StatusConfig()
-        ' 배열 초기화
         config.led = New BS2LedStatusConfig(BS2Environment.BS2_DEVICE_STATUS_NUM - 1) {}
         config.buzzer = New BS2BuzzerStatusConfig(BS2Environment.BS2_DEVICE_STATUS_NUM - 1) {}
 
@@ -1502,10 +1540,10 @@ Public Class Form1
 
         API.BS2_SetCheckGlobalAPBViolationHandler(sdkContext, cbGlobalAPB)
 
-        txtRealTimeLog.AppendText(">> 장비 인증후 유저아이디 넘겨받아 도어접점하는 모드 준비 완료." & vbCrLf)
+        txtRealTimeLog.AppendText(">> 장비 인증후 유저아이디 넘겨받아 도어접점하는 모드 준비 완료. (장비자체에 릴레이 설정을 비활성화 시켜야함)" & vbCrLf)
 
     End Sub
-    ' 장비가 유저아이디를 넘겨줄 때 이 함수가 호출된다.
+    ' 장비에서 얼굴을 인증하면 이 함수가 호출된다.
     Private Sub HandleGlobalAPB(deviceId As UInteger, seq As UShort, userID_1 As String, userID_2 As String, isDualAuth As Boolean)
 
         Dim responseResult As Integer
@@ -1515,25 +1553,22 @@ Public Class Form1
             Case "1"
                 responseResult = BS2ErrorCode.BS_SDK_SUCCESS
                 Task.Run(Sub()
-                             UnlockDoor(deviceId, 1)
-                             'OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..  -- 릴레이 접점 신호 안남....
-                             'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기  -- 릴레이 접점 신호 안남....
-                             'TestBuzzer_HardCoded(deviceId)  ' 테스트용으로 부저음 울리기 (하드코딩 버전))  -- 릴레이 접점 신호 안남....
-                             'TestLED(deviceId)     ' 테스트용으로 LED 점멸시키기)  -- 릴레이 접점 신호 안남....
+                             Dim resDoor = modSupremaFunc.UnlockDoor(sdkContext, deviceId, 1)
+                             Me.BeginInvoke(Sub()
+                                                If resDoor = BS2ErrorCode.BS_SDK_SUCCESS Then
+                                                    txtRealTimeLog.AppendText(">> [성공] 문 열림 명령 전송 완료" & vbCrLf)
+                                                Else
+                                                    txtRealTimeLog.AppendText($">> [실패] 문 열기 실패: {resDoor}" & vbCrLf)
+                                                End If
+                                            End Sub)
                          End Sub)
             Case "-1"
                 responseResult = BS2ErrorCode.BS_SDK_ERROR_EXPIRED
+                txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {responseResult}" & vbCrLf)
             Case Else
                 responseResult = BS2ErrorCode.BS_SDK_ERROR_ACCESS_RULE_VIOLATION
+                txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {responseResult}" & vbCrLf)
         End Select
-
-        Me.BeginInvoke(Sub()
-                           If responseResult = BS2ErrorCode.BS_SDK_SUCCESS Then
-                               txtRealTimeLog.AppendText($">> [승인] ID:{userID_1} - {resultMsg}" & vbCrLf)
-                           Else
-                               txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {resultMsg}" & vbCrLf)
-                           End If
-                       End Sub)
 
         API.BS2_CheckGlobalAPBViolation(sdkContext, deviceId, seq, responseResult, 0)
 
