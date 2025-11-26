@@ -555,7 +555,6 @@ Public Class Form1
     Private Sub Form1_FormClosing(sender As Object, e As FormClosingEventArgs) Handles Me.FormClosing
 
         If sdkContext <> IntPtr.Zero Then
-            ' 종료 전 연결된 장치 해제
             If connectedDeviceId <> 0 Then
                 BS2_DisconnectDevice(sdkContext, connectedDeviceId)
             End If
@@ -567,7 +566,6 @@ Public Class Form1
 
     Private Sub btnDLLUnLoad_Click(sender As Object, e As EventArgs) Handles btnDLLUnLoad.Click
 
-        ' 종료 전 연결된 장치 해제
         If connectedDeviceId <> 0 Then
             BS2_DisconnectDevice(sdkContext, connectedDeviceId)
         End If
@@ -647,9 +645,9 @@ Public Class Form1
 
 
         ' 안면 지원 여부 확인
-        ' 최신장비의 Visual Face (FaceEx) 지원 여부 : 바이오 스테이션
+        ' 최신장비의 Visual Face (FaceEx) 지원 여부 : 바이오 스테이션 시리즈
         Dim isFaceExSupported = (cap.systemSupported And BS2CapabilitySystemSupport.SYSTEM_SUPPORT_FACEEX) > 0
-        ' 구형장비의 Legacy Face 지원 여부 : 페이스 스테이션
+        ' 구형장비의 Legacy Face 지원 여부 : 페이스 스테이션 등
         Dim isLegacyFaceSupported = Convert.ToBoolean(deviceInfo.faceSupported)
 
         ' 사용자 구조체 초기화
@@ -743,12 +741,13 @@ Public Class Form1
         ElseIf rbScanDevice.Checked Then
 
             If isFaceExSupported Then
-                MessageBox.Show("[Visual Face] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
+                MessageBox.Show("[신형장비 안면등록] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
+
                 Dim faces(0) As BS2FaceExWarped
                 Dim resultScan As BS2ErrorCode = BS2_ScanFaceEx(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
 
                 If resultScan = BS2ErrorCode.BS_SDK_SUCCESS Then
-                    userBlob.user.numFaces = 1
+                    userBlob.user.numFaces = 1  ' 얼굴 1개 등록
                     Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
                     ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
                     Marshal.StructureToPtr(faces(0), ptrFaceBuf, False)
@@ -759,7 +758,8 @@ Public Class Form1
                 End If
 
             ElseIf isLegacyFaceSupported Then
-                MessageBox.Show("[Legacy Face] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
+                MessageBox.Show("[구형장비 안면등록] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
+
                 Dim faces(0) As BS2Face
                 Dim resultScan As BS2ErrorCode = BS2_ScanFace(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
 
@@ -1564,10 +1564,10 @@ Public Class Form1
                          End Sub)
             Case "-1"
                 responseResult = BS2ErrorCode.BS_SDK_ERROR_EXPIRED
-                txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {responseResult}" & vbCrLf)
+                Me.BeginInvoke(Sub() txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {responseResult}" & vbCrLf))
             Case Else
                 responseResult = BS2ErrorCode.BS_SDK_ERROR_ACCESS_RULE_VIOLATION
-                txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {responseResult}" & vbCrLf)
+                Me.BeginInvoke(Sub() txtRealTimeLog.AppendText($">> [거부] ID:{userID_1} - {responseResult}" & vbCrLf))
         End Select
 
         API.BS2_CheckGlobalAPBViolation(sdkContext, deviceId, seq, responseResult, 0)
