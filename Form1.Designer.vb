@@ -60,6 +60,9 @@ Partial Class Form1
         btnDeepClean = New Button()
         btnSetGlobalAPB = New Button()
         btnSetDoor = New Button()
+        btnFactoryReset = New Button()
+        btnCustomReset = New Button()
+        btnSettingCopy = New Button()
         SuspendLayout()
         ' 
         ' btnDLLLoad
@@ -153,7 +156,7 @@ Partial Class Form1
         ' 
         ' txtDeviceID
         ' 
-        txtDeviceID.Location = New Point(185, 191)
+        txtDeviceID.Location = New Point(185, 173)
         txtDeviceID.Name = "txtDeviceID"
         txtDeviceID.Size = New Size(137, 23)
         txtDeviceID.TabIndex = 1
@@ -171,7 +174,7 @@ Partial Class Form1
         ' 
         txtMemNm.Location = New Point(71, 379)
         txtMemNm.Name = "txtMemNm"
-        txtMemNm.Size = New Size(63, 23)
+        txtMemNm.Size = New Size(136, 23)
         txtMemNm.TabIndex = 1
         txtMemNm.Text = "남태열"
         ' 
@@ -188,7 +191,7 @@ Partial Class Form1
         ' 
         txtUserID.Location = New Point(71, 411)
         txtUserID.Name = "txtUserID"
-        txtUserID.Size = New Size(93, 23)
+        txtUserID.Size = New Size(136, 23)
         txtUserID.TabIndex = 1
         txtUserID.Text = "1234"
         ' 
@@ -271,7 +274,7 @@ Partial Class Form1
         ' Label4
         ' 
         Label4.AutoSize = True
-        Label4.Location = New Point(185, 170)
+        Label4.Location = New Point(185, 152)
         Label4.Name = "Label4"
         Label4.Size = New Size(71, 15)
         Label4.TabIndex = 3
@@ -384,9 +387,9 @@ Partial Class Form1
         ' 
         ' btnDeepClean
         ' 
-        btnDeepClean.Location = New Point(1039, 740)
+        btnDeepClean.Location = New Point(1039, 739)
         btnDeepClean.Name = "btnDeepClean"
-        btnDeepClean.Size = New Size(129, 43)
+        btnDeepClean.Size = New Size(129, 44)
         btnDeepClean.TabIndex = 7
         btnDeepClean.Text = "장치 재부팅"
         btnDeepClean.UseVisualStyleBackColor = True
@@ -409,6 +412,33 @@ Partial Class Form1
         btnSetDoor.Text = "== 도어 등록 =="
         btnSetDoor.UseVisualStyleBackColor = True
         ' 
+        ' btnFactoryReset
+        ' 
+        btnFactoryReset.Location = New Point(904, 739)
+        btnFactoryReset.Name = "btnFactoryReset"
+        btnFactoryReset.Size = New Size(129, 44)
+        btnFactoryReset.TabIndex = 7
+        btnFactoryReset.Text = "공장 초기화"
+        btnFactoryReset.UseVisualStyleBackColor = True
+        ' 
+        ' btnCustomReset
+        ' 
+        btnCustomReset.Location = New Point(904, 690)
+        btnCustomReset.Name = "btnCustomReset"
+        btnCustomReset.Size = New Size(129, 43)
+        btnCustomReset.TabIndex = 7
+        btnCustomReset.Text = "장치 세팅 초기화"
+        btnCustomReset.UseVisualStyleBackColor = True
+        ' 
+        ' btnSettingCopy
+        ' 
+        btnSettingCopy.Location = New Point(904, 641)
+        btnSettingCopy.Name = "btnSettingCopy"
+        btnSettingCopy.Size = New Size(129, 43)
+        btnSettingCopy.TabIndex = 7
+        btnSettingCopy.Text = "장치 세팅 복사"
+        btnSettingCopy.UseVisualStyleBackColor = True
+        ' 
         ' Form1
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
@@ -416,6 +446,9 @@ Partial Class Form1
         ClientSize = New Size(1316, 795)
         Controls.Add(btnGetDoorList)
         Controls.Add(btnDisableImageLog)
+        Controls.Add(btnSettingCopy)
+        Controls.Add(btnCustomReset)
+        Controls.Add(btnFactoryReset)
         Controls.Add(btnDeepClean)
         Controls.Add(btnSetDoor)
         Controls.Add(btnRemoveAllDoors)
@@ -497,5 +530,8 @@ Partial Class Form1
     Friend WithEvents btnDeepClean As Button
     Friend WithEvents btnSetGlobalAPB As Button
     Friend WithEvents btnSetDoor As Button
+    Friend WithEvents btnFactoryReset As Button
+    Friend WithEvents btnCustomReset As Button
+    Friend WithEvents btnSettingCopy As Button
 
 End Class

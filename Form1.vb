@@ -9,7 +9,8 @@ Imports Suprema.API
 Public Class Form1
 
     Private sdkContext As IntPtr = IntPtr.Zero  ' SDK 컨텍스트 핸들
-    Private connectedDeviceId As UInteger = 0   ' 연결된 장치 ID(장치 고유번호)
+    Private connectedDeviceId As UInteger  ' 연결된 장치 ID
+    'Private connectedDeviceIds As New List(Of UInteger)()  ' 연결된 장치 ID 목록
     Private cbOnLogReceived As API.OnLogReceived = Nothing   ' 장비 이벤트 받는 콜백함수 선언
     Private cbOnVerifyUser As API.OnVerifyUser = Nothing     ' 1:1 인증용 (ID+얼굴)  ' 서버인증모드에서 사용하는 콜백함수 (대양프로그램은 사용안함)
     Private cbOnIdentifyUser As API.OnIdentifyUser = Nothing ' 1:N 인증용 (얼굴만)   ' 서버인증모드에서 사용하는 콜백함수 (대양프로그램은 사용안함)
@@ -481,6 +482,44 @@ Public Class Form1
             sb.AppendLine($" [조회 실패] 오류 코드: {result}")
         End If
 
+
+
+        ' =========================================================
+        ' 11. 관리자 설정 (Admin Config)
+        ' =========================================================
+        ' 위에서 사용한 authConfig 변수를 재활용하거나 새로 선언해서 조회합니다.
+        ' 확실하게 하기 위해 새로 조회합니다.
+        Dim authConfigAdmin As New BS2AuthConfig()
+        result = API.BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfigAdmin)
+
+        sb.AppendLine(vbCrLf & "== 11. 관리자 설정 (Admin Config)")
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            sb.AppendLine($" - 등록된 관리자 수: {authConfigAdmin.numOperators}")
+
+            If authConfigAdmin.numOperators > 0 Then
+                For i As Integer = 0 To authConfigAdmin.numOperators - 1
+                    Dim op As BS2AuthOperatorLevel = authConfigAdmin.operators(i)
+                    Dim adminID As String = System.Text.Encoding.UTF8.GetString(op.userID).TrimEnd(Chr(0))
+
+                    ' 관리자 레벨 확인 (0:None, 1:Admin, 2:Config, 3:User)
+                    ' 보통 1(Admin)이 전체 관리자입니다.
+                    Dim levelStr As String = ""
+                    Select Case op.level
+                        Case 1 : levelStr = "Administrator (전체 권한)"
+                        Case 2 : levelStr = "Configuration (설정 권한)"
+                        Case 3 : levelStr = "User (사용자)"
+                        Case Else : levelStr = $"Level {op.level}"
+                    End Select
+
+                    sb.AppendLine($"   [{i + 1}] ID: {adminID}  /  권한: {levelStr}")
+                Next
+            Else
+                sb.AppendLine("   => 등록된 관리자가 없습니다. (누구나 메뉴 접근 가능)")
+            End If
+        Else
+            sb.AppendLine($" [조회 실패] 오류 코드: {result}")
+        End If
+
         ' 최종 출력
         txtDeviceInfo.Text = sb.ToString()
         txtDeviceInfo.SelectionStart = 0
@@ -747,6 +786,40 @@ Public Class Form1
                 Dim resultScan As BS2ErrorCode = BS2_ScanFaceEx(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
 
                 If resultScan = BS2ErrorCode.BS_SDK_SUCCESS Then
+
+
+                    ' 스캔된 얼굴 이미지를 JPG 파일로 저장
+                    Try
+                        Dim imgLen As Integer = CInt(faces(0).imageLen)
+                        If imgLen > 0 Then
+                            Dim imgBytes(imgLen - 1) As Byte
+                            Array.Copy(faces(0).imageData, imgBytes, imgLen)
+
+
+                            ' 바이트 배열 -> Base64 문자열 변환
+                            Dim base64String As String = Convert.ToBase64String(imgBytes)
+
+                            ' 디버그 출력 (출력창에서 확인 가능)
+                            Debug.WriteLine("=== [Base64 Image Start] ===")
+                            Debug.WriteLine(base64String)
+                            Debug.WriteLine("=== [Base64 Image End] ===")
+
+                            ' Base64 문자열을 텍스트 파일로 저장
+                            System.IO.File.WriteAllText(System.IO.Path.Combine(Application.StartupPath, "FaceBase64.txt"), base64String)
+
+
+                            ' 파일로 저장
+                            Dim fileName As String = $"Capture_{newUserId}_{DateTime.Now:yyyyMMddHHmmss}.jpg"
+                            Dim savePath As String = System.IO.Path.Combine(Application.StartupPath, fileName)
+
+                            System.IO.File.WriteAllBytes(savePath, imgBytes)
+                            Debug.WriteLine($"[이미지 저장] {savePath}")
+                        End If
+                    Catch ex As Exception
+                        Debug.WriteLine("이미지 저장 중 오류: " & ex.Message)
+                    End Try
+
+
                     userBlob.user.numFaces = 1  ' 얼굴 1개 등록
                     Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
                     ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
@@ -1176,30 +1249,29 @@ Public Class Form1
         Dim eventCode As UShort = log.code
         Dim userId As String = System.Text.Encoding.UTF8.GetString(log.userID).TrimEnd(Chr(0))
 
-        ' Invoke: UI 작업이 끝날 때까지 SDK 통신 스레드를 붙잡고 있음 (장비 대기 발생 -> 딜레이 원인)
-        ' BeginInvoke: "이거 나중에 처리해" 하고 SDK 스레드는 즉시 장비에 응답(ACK)을 보냄 (딜레이 해결)
         Me.Invoke(Sub()
                       Dim curTime As String = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
                       Dim eventName As String = CType(eventCode, BS2EventCodeEnum).ToString()
-
                       txtRealTimeLog.AppendText($"[{curTime}] ::: ID:{userId} / {eventName} (0x{eventCode:X4})" & vbCrLf)
 
-                      Dim isFaceSuccess As Boolean = (eventCode = BS2EventCodeEnum.IDENTIFY_SUCCESS_FACE)
-                      ' 장비에서 얼굴 인증 성공 이벤트인 경우에만 문 열기 시도
-                      If isFaceSuccess Then
+                      'Dim isFaceSuccess As Boolean = (eventCode = BS2EventCodeEnum.IDENTIFY_SUCCESS_FACE)
+                      '' 장비에서 얼굴 인증 성공 이벤트인 경우에만 문 열기 시도
+                      'If isFaceSuccess Then
 
-                          If userId = "1234" Then
-                              txtRealTimeLog.AppendText(">> [문을 연다] 얼굴 인증 성공 & ID 1234 확인됨!" & vbCrLf)
+                      '    If userId = "1234" Then
+                      '        txtRealTimeLog.AppendText(">> [문을 연다] 얼굴 인증 성공 & ID 1234 확인됨!" & vbCrLf)
 
-                              'UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)  -- 릴레이 접점 신호 안남....
-                              'OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..  -- 릴레이 접점 신호 안남....
-                              'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기  -- 릴레이 접점 신호 안남....
-                              'TestBuzzer_HardCoded(deviceId)  ' 테스트용으로 부저음 울리기 (하드코딩 버전))  -- 릴레이 접점 신호 안남....
-                              'TestLED(deviceId)     ' 테스트용으로 LED 점멸시키기)  -- 릴레이 접점 신호 안남....
-                          Else
-                              txtRealTimeLog.AppendText($">> [문을 열지않음] (ID: {userId})" & vbCrLf)
-                          End If
-                      End If
+                      '        ' 실시간 로그처리에서 디비조회후 도어제어를 하지 않는다. 
+
+                      '        'UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)  -- 릴레이 접점 신호 안남....
+                      '        'OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..  -- 릴레이 접점 신호 안남....
+                      '        'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기  -- 릴레이 접점 신호 안남....
+                      '        'TestBuzzer_HardCoded(deviceId)  ' 테스트용으로 부저음 울리기 (하드코딩 버전))  -- 릴레이 접점 신호 안남....
+                      '        'TestLED(deviceId)     ' 테스트용으로 LED 점멸시키기)  -- 릴레이 접점 신호 안남....
+                      '    Else
+                      '        txtRealTimeLog.AppendText($">> [문을 열지않음] (ID: {userId})" & vbCrLf)
+                      '    End If
+                      'End If
                   End Sub)
     End Sub
     ' 도어 ID를 지정하여 문을 여는 함수
@@ -1389,55 +1461,55 @@ Public Class Form1
         End If
     End Sub
 
-    Private Sub btnCheckConfig_Click(sender As Object, e As EventArgs)
+    'Private Sub btnCheckConfig_Click(sender As Object, e As EventArgs)
 
-        If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+    '    If Not IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
-        Dim sb As New Text.StringBuilder
-        sb.AppendLine("=== 장비 설정 상태 점검 ===")
+    '    Dim sb As New Text.StringBuilder
+    '    sb.AppendLine("=== 장비 설정 상태 점검 ===")
 
-        ' 1. 인증 설정 확인 (Global APB, Server Matching)
-        Dim authConfig As New BS2AuthConfig
-        Dim resAuth As BS2ErrorCode = BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfig)
+    '    ' 1. 인증 설정 확인 (Global APB, Server Matching)
+    '    Dim authConfig As New BS2AuthConfig
+    '    Dim resAuth As BS2ErrorCode = BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfig)
 
-        If resAuth = BS2ErrorCode.BS_SDK_SUCCESS Then
-            sb.AppendLine($"[인증 설정]")
-            sb.AppendLine($" - 서버 인증 모드 (useServerMatching): {authConfig.useServerMatching}")
-            sb.AppendLine($" - 전역 APB (useGlobalAPB): {authConfig.useGlobalAPB}")
+    '    If resAuth = BS2ErrorCode.BS_SDK_SUCCESS Then
+    '        sb.AppendLine($"[인증 설정]")
+    '        sb.AppendLine($" - 서버 인증 모드 (useServerMatching): {authConfig.useServerMatching}")
+    '        sb.AppendLine($" - 전역 APB (useGlobalAPB): {authConfig.useGlobalAPB}")
 
-            If authConfig.useGlobalAPB = 1 Then
-                sb.AppendLine("   => [확인 필요] Global APB가 켜져 있습니다.")
-            Else
-                sb.AppendLine("   => [정상] Global APB가 꺼져 있습니다.")
-            End If
-        Else
-            sb.AppendLine($"[인증 설정] 조회 실패: {resAuth}")
-        End If
+    '        If authConfig.useGlobalAPB = 1 Then
+    '            sb.AppendLine("   => [확인 필요] Global APB가 켜져 있습니다.")
+    '        Else
+    '            sb.AppendLine("   => [정상] Global APB가 꺼져 있습니다.")
+    '        End If
+    '    Else
+    '        sb.AppendLine($"[인증 설정] 조회 실패: {resAuth}")
+    '    End If
 
-        sb.AppendLine("-----------------------------")
+    '    sb.AppendLine("-----------------------------")
 
-        ' 2. 이벤트 설정 확인 (Image Log)
-        Dim eventConfig As New BS2EventConfig
-        ' (참고: 구조체 내 배열 초기화가 없으면 Get호출 시 에러날 수 있으므로 간단 초기화)
-        eventConfig.imageEventFilter = New BS2ImageEventFilter(BS2_EVENT_MAX_IMAGE_CODE_COUNT - 1) {}
+    '    ' 2. 이벤트 설정 확인 (Image Log)
+    '    Dim eventConfig As New BS2EventConfig
+    '    ' (참고: 구조체 내 배열 초기화가 없으면 Get호출 시 에러날 수 있으므로 간단 초기화)
+    '    eventConfig.imageEventFilter = New BS2ImageEventFilter(BS2_EVENT_MAX_IMAGE_CODE_COUNT - 1) {}
 
-        Dim resEvent As BS2ErrorCode = BS2_GetEventConfig(sdkContext, connectedDeviceId, eventConfig)
+    '    Dim resEvent As BS2ErrorCode = BS2_GetEventConfig(sdkContext, connectedDeviceId, eventConfig)
 
-        If resEvent = BS2ErrorCode.BS_SDK_SUCCESS Then
-            sb.AppendLine($"[이벤트 설정]")
-            sb.AppendLine($" - 이미지 로그 필터 개수 (numImageEventFilter): {eventConfig.numImageEventFilter}")
+    '    If resEvent = BS2ErrorCode.BS_SDK_SUCCESS Then
+    '        sb.AppendLine($"[이벤트 설정]")
+    '        sb.AppendLine($" - 이미지 로그 필터 개수 (numImageEventFilter): {eventConfig.numImageEventFilter}")
 
-            If eventConfig.numImageEventFilter > 0 Then
-                sb.AppendLine("   => [문제 발견] 이미지 로그가 켜져 있습니다. (전송 딜레이 원인)")
-            Else
-                sb.AppendLine("   => [정상] 이미지 로그가 꺼져 있습니다.")
-            End If
-        Else
-            sb.AppendLine($"[이벤트 설정] 조회 실패: {resEvent}")
-        End If
-        txtDeviceInfo.Text = sb.ToString
+    '        If eventConfig.numImageEventFilter > 0 Then
+    '            sb.AppendLine("   => [문제 발견] 이미지 로그가 켜져 있습니다. (전송 딜레이 원인)")
+    '        Else
+    '            sb.AppendLine("   => [정상] 이미지 로그가 꺼져 있습니다.")
+    '        End If
+    '    Else
+    '        sb.AppendLine($"[이벤트 설정] 조회 실패: {resEvent}")
+    '    End If
+    '    txtDeviceInfo.Text = sb.ToString
 
-    End Sub
+    'End Sub
 
     Private Sub btnDeepClean_Click(sender As Object, e As EventArgs) Handles btnDeepClean.Click
 
@@ -1536,6 +1608,7 @@ Public Class Form1
 
         API.BS2_SetAuthConfig(sdkContext, connectedDeviceId, authConfig)
 
+        ' 실제 게이트데몬에서는 프로그램 시작시 이 핸들러를 등록해서 사용한다.
         cbGlobalAPB = New API.OnCheckGlobalAPBViolation(AddressOf HandleGlobalAPB)
 
         API.BS2_SetCheckGlobalAPBViolationHandler(sdkContext, cbGlobalAPB)
@@ -1546,6 +1619,10 @@ Public Class Form1
     ' 장비에서 얼굴을 인증하면 이 함수가 호출된다.
     Private Sub HandleGlobalAPB(deviceId As UInteger, seq As UShort, userID_1 As String, userID_2 As String, isDualAuth As Boolean)
 
+        '<UnmanagedFunctionPointer(CallingConvention.Cdecl)>
+        'Public Delegate Sub OnCheckGlobalAPBViolation(deviceId As BS2_SCHEDULE_ID, seq As UShort, userID_1 As String, userID_2 As String, isDualAuth As Boolean)
+        '실제 얼굴을 인증한 장치의 deviceId 와 사용자의 ID가 userID_1에 담겨서 온다.
+
         Dim responseResult As Integer
         Dim resultMsg As String = CheckTest(userID_1)
 
@@ -1553,7 +1630,7 @@ Public Class Form1
             Case "1"
                 responseResult = BS2ErrorCode.BS_SDK_SUCCESS
                 Task.Run(Sub()
-                             Dim resDoor = modSupremaFunc.UnlockDoor(sdkContext, deviceId, 1)
+                             Dim resDoor = modSupremaFunc.UnlockDoor(sdkContext, deviceId, 1)  ' 1번 도어를 열어라..
                              Me.BeginInvoke(Sub()
                                                 If resDoor = BS2ErrorCode.BS_SDK_SUCCESS Then
                                                     txtRealTimeLog.AppendText(">> [성공] 문 열림 명령 전송 완료" & vbCrLf)
@@ -1676,4 +1753,428 @@ Public Class Form1
 
     End Sub
 
+    Private Sub btnFactoryReset_Click(sender As Object, e As EventArgs) Handles btnFactoryReset.Click
+
+        ' 1. 초기화 진행 여부를 묻는 메시지 박스 띄우기
+        Dim confirmResult As DialogResult = MessageBox.Show(
+        "정말로 장비를 공장 초기화하시겠습니까?" & vbCrLf & vbCrLf &
+        "주의: 관리자 정보, 사용자 데이터, 네트워크 설정 등 모든 데이터가 삭제되며 복구할 수 없습니다.",
+        "공장 초기화 경고",
+        MessageBoxButtons.YesNo,
+        MessageBoxIcon.Warning,
+        MessageBoxDefaultButton.Button2) ' 실수 방지를 위해 기본 선택을 '아니오'로 설정
+
+        ' 2. 사용자가 '예(Yes)'를 눌렀을 때만 실행
+        If confirmResult = DialogResult.Yes Then
+
+            ' 장비 공장 초기화 (모든 설정 및 사용자 데이터 삭제)
+            Dim result As BS2ErrorCode = API.BS2_FactoryReset(sdkContext, connectedDeviceId)
+
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show("장비가 성공적으로 공장 초기화되었습니다." & vbCrLf & "장비가 재부팅될 수 있습니다.", "초기화 완료", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Else
+                MessageBox.Show("초기화 실패: " & result.ToString(), "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+
+        End If
+
+
+    End Sub
+
+    ' [기능 추가] 장비 세팅값 커스텀 초기화 (시간, 언어, IP)
+    Private Sub ResetDeviceToMyStandard()
+
+        If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
+
+        Dim result As BS2ErrorCode
+        Dim sbLog As New System.Text.StringBuilder()
+        sbLog.AppendLine("=== 장비 사용자 정의 초기화 시작 ===")
+
+        ' ---------------------------------------------------------
+        ' 1. 시스템 설정: 타임존을 한국 표준시(KST, UTC+9)로 설정
+        ' ---------------------------------------------------------
+        Dim sysConfig As New BS2SystemConfig()
+        ' 구조체 내부 배열 초기화 (필수)
+        sysConfig.notUsed = New Byte(16 * 16 * 3 - 1) {}
+        sysConfig.reserved = New Byte(1) {}
+        sysConfig.reserved2 = New Byte(15) {}
+
+        ' 기존 설정 불러오기
+        result = API.BS2_GetSystemConfig(sdkContext, connectedDeviceId, sysConfig)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            sysConfig.timezone = 9 * 3600  ' GMT+9 (32400초)
+            sysConfig.syncTime = 1         ' 서버 시간 동기화 사용 (선택사항)
+
+            result = API.BS2_SetSystemConfig(sdkContext, connectedDeviceId, sysConfig)
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                sbLog.AppendLine("[성공] 타임존 설정 (한국 표준시)")
+            Else
+                sbLog.AppendLine($"[실패] 타임존 설정 오류: {result}")
+            End If
+        Else
+            sbLog.AppendLine($"[실패] 시스템 설정 조회 오류: {result}")
+        End If
+
+
+        ' ---------------------------------------------------------
+        ' 2. 인증 설정 저장 (핵심: 초기 관리자 등록 화면 스킵)
+        '    관리자 수(numOperators)를 0으로 설정하여 전송하면 
+        '    장비는 '설정 완료'로 인식하고 대기 화면으로 넘어갑니다.
+        ' ---------------------------------------------------------
+        Dim authConfig As New BS2AuthConfig()
+        authConfig.authSchedule = New UInteger(BS2Environment.BS2_NUM_OF_AUTH_MODE - 1) {}
+        authConfig.reserved = New Byte(29) {}
+        authConfig.operators = New BS2AuthOperatorLevel(BS2Environment.BS2_MAX_OPERATORS - 1) {}
+
+        result = API.BS2_GetAuthConfig(sdkContext, connectedDeviceId, authConfig)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            authConfig.numOperators = 0 ' 관리자 없음으로 설정
+            result = API.BS2_SetAuthConfig(sdkContext, connectedDeviceId, authConfig)
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                sbLog.AppendLine("[성공] 인증 설정 (초기 관리자 등록 스킵)")
+            Else
+                sbLog.AppendLine($"[실패] 인증 설정 오류: {result}")
+            End If
+        End If
+
+
+        ' ---------------------------------------------------------
+        ' 2. 장비 시간: 현재 PC(한국) 시간으로 즉시 동기화
+        ' ---------------------------------------------------------
+        ' 현재 시간을 Unix Timestamp(UTC 기준)로 변환
+        Dim now As DateTime = DateTime.UtcNow
+        Dim timestamp As UInteger = CType(Util.ConvertToUnixTimestamp(now), UInteger)
+
+        result = API.BS2_SetDeviceTime(sdkContext, connectedDeviceId, timestamp)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            sbLog.AppendLine("[성공] 장비 시간 동기화 완료")
+        Else
+            sbLog.AppendLine($"[실패] 시간 설정 오류: {result}")
+        End If
+
+        ' ---------------------------------------------------------
+        ' 3. 디스플레이 설정: 언어를 한국어로 설정
+        ' ---------------------------------------------------------
+        Dim displayConfig As New BS2DisplayConfig()
+        displayConfig.shortcutHome = New Byte(BS2Environment.BS2_MAX_SHORTCUT_HOME - 1) {}
+        displayConfig.tnaIcon = New Byte(BS2Environment.BS2_MAX_TNA_KEY - 1) {}
+        displayConfig.reserved3 = New Byte(26) {}
+
+        result = API.BS2_GetDisplayConfig(sdkContext, connectedDeviceId, displayConfig)
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            displayConfig.language = BS2LanguageEnum.KOREAN ' 0: 한국어
+            result = API.BS2_SetDisplayConfig(sdkContext, connectedDeviceId, displayConfig)
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                sbLog.AppendLine("[성공] 언어 설정 (한국어)")
+            Else
+                sbLog.AppendLine($"[실패] 언어 설정 오류: {result}")
+            End If
+        End If
+
+        ' ---------------------------------------------------------
+        ' 4. IP 설정: 고정 IP(192.168.0.157) 사용 (DHCP 끄기)
+        ' ---------------------------------------------------------
+        Dim ipConfig As New BS2IpConfig()
+
+        ' 구조체 배열 초기화 (필수)
+        ipConfig.ipAddress = New Byte(BS2Environment.BS2_IPV4_ADDR_SIZE - 1) {}
+        ipConfig.gateway = New Byte(BS2Environment.BS2_IPV4_ADDR_SIZE - 1) {}
+        ipConfig.subnetMask = New Byte(BS2Environment.BS2_IPV4_ADDR_SIZE - 1) {}
+        ipConfig.serverAddr = New Byte(BS2Environment.BS2_IPV4_ADDR_SIZE - 1) {}
+        ipConfig.reserved3 = New Byte(29) {}
+
+        ' 기존 설정값을 먼저 읽어옴 (기존 포트 설정 등을 유지하기 위해)
+        result = API.BS2_GetIPConfig(sdkContext, connectedDeviceId, ipConfig)
+
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+
+            ' (1) DHCP 끄기 (0: 고정 IP 사용, 1: DHCP 사용)
+            ipConfig.useDHCP = 0
+
+            ' (2) 고정 IP 설정 (192.168.0.157)
+            Dim ipBytes As Byte() = System.Text.Encoding.UTF8.GetBytes(txtIP.Text.Trim)
+            Array.Clear(ipConfig.ipAddress, 0, ipConfig.ipAddress.Length)
+            Array.Copy(ipBytes, ipConfig.ipAddress, Math.Min(ipBytes.Length, ipConfig.ipAddress.Length))
+
+            ' (3) 서브넷 마스크 설정 (일반적으로 255.255.255.0)
+            Dim subBytes As Byte() = System.Text.Encoding.UTF8.GetBytes("255.255.255.0")
+            Array.Clear(ipConfig.subnetMask, 0, ipConfig.subnetMask.Length)
+            Array.Copy(subBytes, ipConfig.subnetMask, Math.Min(subBytes.Length, ipConfig.subnetMask.Length))
+
+            ' (4) 게이트웨이 설정 (보통 IP의 끝자리가 1, 예: 192.168.0.1)
+            ' ※ 주의: 게이트웨이가 틀리면 외부망 통신이 안 될 수 있습니다. 현장 상황에 맞춰야 합니다.
+            Dim gateBytes As Byte() = System.Text.Encoding.UTF8.GetBytes("192.168.0.1")
+            Array.Clear(ipConfig.gateway, 0, ipConfig.gateway.Length)
+            Array.Copy(gateBytes, ipConfig.gateway, Math.Min(gateBytes.Length, ipConfig.gateway.Length))
+
+            ' 설정 적용
+            result = API.BS2_SetIPConfig(sdkContext, connectedDeviceId, ipConfig)
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                sbLog.AppendLine("[성공] 고정 IP 설정 완료 (IP: " & txtIP.Text.Trim & " / DHCP: OFF)")
+            Else
+                sbLog.AppendLine($"[실패] IP 설정 오류: {result}")
+            End If
+        Else
+            sbLog.AppendLine($"[실패] 기존 IP 설정 조회 오류: {result}")
+        End If
+
+        'RegisterFactoryAdmin()  ' 장치 초기화면 스킵용 기본 관리자 등록 (현장에서 사용하면 안됨)
+
+        ' 결과 출력
+        MessageBox.Show(sbLog.ToString(), "초기화 결과")
+        txtRealTimeLog.AppendText(sbLog.ToString() & vbCrLf)
+
+    End Sub
+    ' [기능 추가] 초기화면 스킵용 기본 관리자 등록 (ID: 1, PW: 1234)
+    Private Sub RegisterFactoryAdmin()
+        ' 1. 사용자 구조체 생성
+        Dim userBlob As New BS2UserBlob()
+        userBlob.user.userID = New Byte(BS2Environment.BS2_USER_ID_SIZE - 1) {}
+        userBlob.name = New Byte(BS2Environment.BS2_USER_NAME_LEN - 1) {}
+        userBlob.pin = New Byte(BS2Environment.BS2_PIN_HASH_SIZE - 1) {}
+        userBlob.accessGroupId = New UInt32(BS2Environment.BS2_MAX_ACCESS_GROUP_PER_USER - 1) {}
+        userBlob.photo.data = New Byte(BS2Environment.BS2_USER_PHOTO_SIZE - 1) {}
+
+        ' 포인터 초기화
+        userBlob.cardObjs = IntPtr.Zero
+        userBlob.fingerObjs = IntPtr.Zero
+        userBlob.faceObjs = IntPtr.Zero
+
+        ' 2. ID 설정 (ID: "0000")
+        Dim uidBytes = System.Text.Encoding.UTF8.GetBytes("0000")
+        Array.Copy(uidBytes, userBlob.user.userID, Math.Min(uidBytes.Length, userBlob.user.userID.Length))
+
+        ' 3. PIN 설정 (PW: "0000") - 암호화 필요
+        Dim pinCode As String = "0000"   ' 암호 
+        Dim ptrPin = Marshal.AllocHGlobal(BS2Environment.BS2_PIN_HASH_SIZE)
+        Dim ptrPinString = Marshal.StringToHGlobalAnsi(pinCode)
+
+        Try
+            ' SDK가 제공하는 해시 함수로 PIN 변환
+            API.BS2_MakePinCode(sdkContext, ptrPinString, ptrPin)
+            Marshal.Copy(ptrPin, userBlob.pin, 0, BS2Environment.BS2_PIN_HASH_SIZE)
+        Finally
+            Marshal.FreeHGlobal(ptrPin)
+            Marshal.FreeHGlobal(ptrPinString)
+        End Try
+
+        ' 4. 이름 설정
+        Dim nameBytes = System.Text.Encoding.UTF8.GetBytes("Admin")
+        Array.Copy(nameBytes, userBlob.name, Math.Min(nameBytes.Length, userBlob.name.Length))
+
+        ' 5. 기본 설정 및 ***관리자 권한 부여*** (이게 핵심)
+        userBlob.user.flag = 0
+        userBlob.user.version = 0
+        userBlob.user.authGroupID = 0
+        userBlob.user.faceChecksum = 0
+
+        ' [중요] 관리자로 설정 (BS2UserOperatorEnum.ADMIN = 1)
+        ' 주의: BS2User 구조체에는 operator 필드가 없고, 별도 API나 AuthConfig로 설정해야 하지만,
+        ' 일부 최신 SDK/장비는 사용자 정보 자체에 권한을 묻는 경우가 있습니다. 
+        ' 하지만 표준적인 방법은 'BS2AuthConfig'의 Operators에 이 ID를 추가하는 것입니다.
+
+        ' 우선 사용자 등록
+        Dim userList As BS2UserBlob() = {userBlob}
+        Dim result As BS2ErrorCode = API.BS2_EnrollUser(sdkContext, connectedDeviceId, userList, 1, 1)
+
+        If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+            ' 6. 등록된 사용자를 '관리자'로 승격시킴
+            Dim authConfigExt As New BS2AuthConfigExt()
+            ' 배열 초기화 (필수)
+            authConfigExt.extAuthSchedule = New UInteger(BS2Environment.BS2_MAX_NUM_OF_EXT_AUTH_MODE - 1) {}
+            authConfigExt.operators = New BS2AuthOperatorLevel(BS2Environment.BS2_MAX_OPERATORS - 1) {}
+            For i As Integer = 0 To authConfigExt.operators.Length - 1
+                authConfigExt.operators(i).userID = New Byte(BS2Environment.BS2_USER_ID_SIZE - 1) {}
+                authConfigExt.operators(i).reserved = New Byte(2) {}
+            Next
+            authConfigExt.reserved2 = New Byte(3) {}
+            authConfigExt.reserved3 = New Byte(0) {}
+            authConfigExt.reserved4 = New Byte(255) {}
+
+            ' 기존 설정 읽기
+            API.BS2_GetAuthConfigExt(sdkContext, connectedDeviceId, authConfigExt)
+
+            ' 첫 번째 관리자 슬롯에 ID '1' 등록
+            authConfigExt.numOperators = 1
+            Array.Copy(uidBytes, authConfigExt.operators(0).userID, Math.Min(uidBytes.Length, BS2Environment.BS2_USER_ID_SIZE))
+            authConfigExt.operators(0).level = 1 ' 1: Admin (전체 권한)
+
+            ' 설정 적용
+            result = API.BS2_SetAuthConfigExt(sdkContext, connectedDeviceId, authConfigExt)
+
+            If result = BS2ErrorCode.BS_SDK_SUCCESS Then
+                txtRealTimeLog.AppendText(">> [완료] 기본 관리자(ID:1 / PW:1234) 등록 완료. (초기 설정 마법사 해제됨)" & vbCrLf)
+            End If
+        Else
+            txtRealTimeLog.AppendText($">> [실패] 관리자 사용자 등록 실패: {result}" & vbCrLf)
+        End If
+
+    End Sub
+
+    Private Sub btnCustomReset_Click(sender As Object, e As EventArgs) Handles btnCustomReset.Click
+
+        ' 1. 초기화 진행 여부를 묻는 메시지 박스 띄우기
+        Dim confirmResult = MessageBox.Show(
+        "장치 세팅을 초기화 하시겠습니까?" & vbCrLf & vbCrLf &
+        "주의: 아이피 세팅, 언어 설정 등이 변경됩니다.",
+        "세팅 초기화 경고",
+        MessageBoxButtons.YesNo,
+        MessageBoxIcon.Warning,
+        MessageBoxDefaultButton.Button2) ' 실수 방지를 위해 기본 선택을 '아니오'로 설정
+
+        If confirmResult = DialogResult.Yes Then
+            ResetDeviceToMyStandard()
+        End If
+
+    End Sub
+
+    Private Sub btnSettingCopy_Click(sender As Object, e As EventArgs) Handles btnSettingCopy.Click
+
+        ' 1. 복사할 원본 장비 IP 입력 받기
+        Dim sourceIp As String = InputBox("설정을 복사해올 원본 장비의 IP 주소를 입력하세요:", "장비 설정 복사", "192.168.0.100")
+
+        If String.IsNullOrEmpty(sourceIp) Then Return ' 취소 시 종료
+
+        ' 2. 설정 복사 함수 실행 (포트는 기본 51211)
+        CloneDeviceSettings(sourceIp, 51211)
+    End Sub
+    ' [기능 추가] 다른 IP의 장비 설정을 가져와서 현재 장비에 똑같이 적용하기
+    Private Sub CloneDeviceSettings(sourceIp As String, sourcePort As UShort)
+
+        ' 1. 대상 장비(현재 연결된 장비) 확인
+        If connectedDeviceId = 0 Then
+            MessageBox.Show("설정을 적용할 대상 장비가 먼저 연결되어 있어야 합니다.")
+            Return
+        End If
+
+        Dim sourceDeviceId As UInteger = 0
+        Dim result As BS2ErrorCode
+
+        ' 2. 원본 장비(Source) 연결 시도
+        Dim ptrIp As IntPtr = Marshal.StringToHGlobalAnsi(sourceIp)
+        Try
+            ' SDK Context는 기존 것을 공유해서 사용
+            result = API.BS2_ConnectDeviceViaIP(sdkContext, ptrIp, sourcePort, sourceDeviceId)
+
+            If result <> BS2ErrorCode.BS_SDK_SUCCESS Then
+                MessageBox.Show($"원본 장비({sourceIp}) 연결 실패: {result}")
+                Return
+            End If
+        Finally
+            Marshal.FreeHGlobal(ptrIp)
+        End Try
+
+        ' 3. 원본 장비에서 설정값 읽어오기
+        Dim sbLog As New System.Text.StringBuilder()
+        sbLog.AppendLine($"=== 장비 설정 복사 시작 ({sourceIp} -> {connectedDeviceId}) ===")
+
+        Try
+            ' (1) 시스템 설정 (타임존, 카메라 주파수 등)
+            Dim sysConfig As New BS2SystemConfig()
+            sysConfig.notUsed = New Byte(16 * 16 * 3 - 1) {}
+            sysConfig.reserved = New Byte(1) {}
+            sysConfig.reserved2 = New Byte(15) {}
+
+            Dim resSys = API.BS2_GetSystemConfig(sdkContext, sourceDeviceId, sysConfig)
+
+            ' (2) 디스플레이 설정 (언어, 배경화면, 볼륨 등)
+            Dim displayConfig As New BS2DisplayConfig()
+            displayConfig.shortcutHome = New Byte(BS2Environment.BS2_MAX_SHORTCUT_HOME - 1) {}
+            displayConfig.tnaIcon = New Byte(BS2Environment.BS2_MAX_TNA_KEY - 1) {}
+            displayConfig.reserved3 = New Byte(26) {}
+
+            Dim resDisp = API.BS2_GetDisplayConfig(sdkContext, sourceDeviceId, displayConfig)
+
+            ' (3) 인증 설정 (인증 모드, 글로벌 APB 등)
+            Dim authConfig As New BS2AuthConfig()
+
+            ' [중요] 관리자 정보를 담을 배열 초기화 (이 부분이 없으면 관리자 정보가 복사되지 않을 수 있음)
+            authConfig.authSchedule = New UInteger(BS2Environment.BS2_NUM_OF_AUTH_MODE - 1) {}
+            authConfig.reserved = New Byte(29) {}
+            authConfig.operators = New BS2AuthOperatorLevel(BS2Environment.BS2_MAX_OPERATORS - 1) {}
+
+            ' 각 관리자 슬롯의 내부 배열도 초기화
+            For i As Integer = 0 To authConfig.operators.Length - 1
+                authConfig.operators(i).userID = New Byte(BS2Environment.BS2_USER_ID_SIZE - 1) {}
+                authConfig.operators(i).reserved = New Byte(2) {}
+            Next
+
+            Dim resAuth = API.BS2_GetAuthConfig(sdkContext, sourceDeviceId, authConfig)
+
+
+
+            ' (4) 상태 설정 (LED, 부저)
+            Dim statusConfig As New BS2StatusConfig()
+            statusConfig.led = New BS2LedStatusConfig(BS2Environment.BS2_DEVICE_STATUS_NUM - 1) {}
+            statusConfig.buzzer = New BS2BuzzerStatusConfig(BS2Environment.BS2_DEVICE_STATUS_NUM - 1) {}
+
+            Dim resStat = API.BS2_GetStatusConfig(sdkContext, sourceDeviceId, statusConfig)
+
+            ' (5) 얼굴 인식 설정 (보안 등급, 감지 거리 등)
+            Dim faceConfig As New BS2FaceConfig()
+            faceConfig.reserved = New Byte(12) {}
+
+            Dim resFace = API.BS2_GetFaceConfig(sdkContext, sourceDeviceId, faceConfig)
+
+            ' 4. 원본 장비 연결 해제 (설정 다 읽었으므로 끊기)
+            API.BS2_DisconnectDevice(sdkContext, sourceDeviceId)
+
+
+            ' 5. 현재 장비(Target)에 설정 덮어쓰기
+            ' 주의: IP 설정(BS2IpConfig)은 복사하지 않음 (IP 충돌 방지)
+
+            ' (1) 시스템 설정 적용
+            If resSys = BS2ErrorCode.BS_SDK_SUCCESS Then
+                If API.BS2_SetSystemConfig(sdkContext, connectedDeviceId, sysConfig) = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    sbLog.AppendLine("[성공] 시스템 설정 복사 완료")
+                Else
+                    sbLog.AppendLine("[실패] 시스템 설정 적용 실패")
+                End If
+            End If
+
+            ' (2) 디스플레이 설정 적용
+            If resDisp = BS2ErrorCode.BS_SDK_SUCCESS Then
+                If API.BS2_SetDisplayConfig(sdkContext, connectedDeviceId, displayConfig) = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    sbLog.AppendLine("[성공] 디스플레이/소리 설정 복사 완료")
+                Else
+                    sbLog.AppendLine("[실패] 디스플레이 설정 적용 실패")
+                End If
+            End If
+
+            ' (3) 인증 설정 적용
+            If resAuth = BS2ErrorCode.BS_SDK_SUCCESS Then
+                If API.BS2_SetAuthConfig(sdkContext, connectedDeviceId, authConfig) = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    sbLog.AppendLine("[성공] 인증 모드 설정 복사 완료")
+                Else
+                    sbLog.AppendLine("[실패] 인증 설정 적용 실패")
+                End If
+            End If
+
+            ' (4) 상태 설정 적용
+            If resStat = BS2ErrorCode.BS_SDK_SUCCESS Then
+                If API.BS2_SetStatusConfig(sdkContext, connectedDeviceId, statusConfig) = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    sbLog.AppendLine("[성공] LED/부저 설정 복사 완료")
+                Else
+                    sbLog.AppendLine("[실패] 상태 설정 적용 실패")
+                End If
+            End If
+
+            ' (5) 얼굴 설정 적용
+            If resFace = BS2ErrorCode.BS_SDK_SUCCESS Then
+                If API.BS2_SetFaceConfig(sdkContext, connectedDeviceId, faceConfig) = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    sbLog.AppendLine("[성공] 얼굴 인식 설정 복사 완료")
+                Else
+                    sbLog.AppendLine("[실패] 얼굴 설정 적용 실패")
+                End If
+            End If
+
+        Catch ex As Exception
+            MessageBox.Show("설정 복사 중 오류 발생: " & ex.Message)
+        End Try
+
+        ' 결과 리포트
+        MessageBox.Show(sbLog.ToString())
+        txtRealTimeLog.AppendText(sbLog.ToString() & vbCrLf)
+
+    End Sub
 End Class
