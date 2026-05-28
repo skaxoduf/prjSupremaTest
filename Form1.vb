@@ -673,7 +673,13 @@ Public Class Form1
         ' 연결 상태 확인
         If Not modSupremaFunc.IsDeviceConnected(sdkContext, connectedDeviceId) Then Return
 
+        If Not chkEnrollFace.Checked AndAlso Not chkEnrollCard.Checked Then
+            MessageBox.Show("등록할 항목(안면 또는 카드)을 최소 하나 이상 선택해주세요.")
+            Return
+        End If
+
         BS2_SetDefaultResponseTimeout(sdkContext, 10 * 1000)  ' 타임아웃 10초설정
+
 
         ' 장치 정보 조회
         Dim deviceInfo As BS2SimpleDeviceInfo
@@ -683,11 +689,8 @@ Public Class Form1
         BS2_GetDeviceCapabilities(sdkContext, connectedDeviceId, cap)
 
 
-        ' 안면 지원 여부 확인
-        ' 최신장비의 Visual Face (FaceEx) 지원 여부 : 바이오 스테이션 시리즈
-        Dim isFaceExSupported = (cap.systemSupported And BS2CapabilitySystemSupport.SYSTEM_SUPPORT_FACEEX) > 0
-        ' 구형장비의 Legacy Face 지원 여부 : 페이스 스테이션 등
-        Dim isLegacyFaceSupported = Convert.ToBoolean(deviceInfo.faceSupported)
+
+
 
         ' 사용자 구조체 초기화
         Dim userBlob As New BS2UserFaceExBlob
@@ -712,161 +715,196 @@ Public Class Form1
         userBlob.setting.idAuthMode = BS2AuthModeEnum.BS2_AUTH_MODE_NONE
         userBlob.setting.securityLevel = BS2UserSecurityLevelEnum.DEFAULT
 
+        Dim ptrCardBuf = IntPtr.Zero
         Dim ptrFaceBuf = IntPtr.Zero
 
-        ' JPG 파일을 가지고 안면등록하기
-        If rbLoadImage.Checked Then
-
-            Dim imagePath = txtImagePath.Text.Trim
-            If String.IsNullOrEmpty(imagePath) OrElse Not File.Exists(imagePath) Then
-                MessageBox.Show("유효한 이미지 파일 경로를 입력해주세요.")
-                Return
-            End If
-
-            If isFaceExSupported Then
-                Dim extractedTemplate As New BS2TemplateEx
-                Dim warpedImageBytes As Byte() = Nothing ' 정규화된 이미지를 받을 변수
-
-                ' 새로 만든 함수 호출
-                If GetFaceDataFromImage(sdkContext, connectedDeviceId, imagePath, extractedTemplate, warpedImageBytes) Then
-                    userBlob.user.numFaces = 1
-
-                    ' 표준 구조체
-                    Dim faceExWarped As New BS2FaceExWarped
-                    faceExWarped.faceIndex = 0
-                    faceExWarped.numOfTemplate = 1
-
-                    ' 재부팅 방지를 위해 Flag=1 (WARPED) 유지
-                    faceExWarped.flag = 1  ' 0으로 하면 장비가 갑자기 재부팅됨..
-                    faceExWarped.reserved = 0
-
-                    ' 배열 초기화 (이거 안 하면 에러 뜸)
-                    faceExWarped.unused = New Byte(5) {}
-
-                    ' 이미지 데이터 복사
-                    faceExWarped.imageLen = CUInt(warpedImageBytes.Length)
-                    faceExWarped.imageData = New Byte(BS2_MAX_WARPED_IMAGE_LENGTH - 1) {}
-                    Array.Copy(warpedImageBytes, faceExWarped.imageData, warpedImageBytes.Length)
-
-                    ' IR 데이터 초기화
-                    faceExWarped.irImageLen = 0
-                    faceExWarped.irImageData = New Byte(BS2_MAX_WARPED_IR_IMAGE_LENGTH - 1) {}
-
-                    ' 템플릿 배열 초기화 및 할당
-                    faceExWarped.templateEx = New BS2TemplateEx(BS2_MAX_TEMPLATES_PER_FACE_EX - 1) {}
-                    faceExWarped.templateEx(0) = extractedTemplate
-                    For i = 1 To BS2_MAX_TEMPLATES_PER_FACE_EX - 1
-                        faceExWarped.templateEx(i) = New BS2TemplateEx
-                        faceExWarped.templateEx(i).data = New Byte(BS2_FACE_EX_TEMPLATE_SIZE - 1) {}
-                        faceExWarped.templateEx(i).reserved = New Byte(2) {}
-                    Next
-
-                    ' 메모리 할당 및 연결
-                    Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
-                    ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
-
-                    ' 구조체를 포인터로 변환 (여기서 잘못꼬이면 장비가 재부팅함.....ㅠㅠ)
-                    Marshal.StructureToPtr(faceExWarped, ptrFaceBuf, False)
-                    userBlob.faceExObjs = ptrFaceBuf
-                Else
-                    Return
-                End If
-            Else
-                MessageBox.Show("이 장치는 이미지 파일 등록(Visual Face)을 지원하지 않습니다.")
-                Return
-            End If
-
-            ' 장비에서 촬영후 안면등록 (비주얼 페이스 기능 활용)
-        ElseIf rbScanDevice.Checked Then
-
-            If isFaceExSupported Then
-                MessageBox.Show("[신형장비 안면등록] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
-
-                Dim faces(0) As BS2FaceExWarped
-                Dim resultScan As BS2ErrorCode = BS2_ScanFaceEx(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
-
-                If resultScan = BS2ErrorCode.BS_SDK_SUCCESS Then
 
 
-                    ' 스캔된 얼굴 이미지를 JPG 파일로 저장
-                    Try
-                        Dim imgLen As Integer = CInt(faces(0).imageLen)
-                        If imgLen > 0 Then
-                            Dim imgBytes(imgLen - 1) As Byte
-                            Array.Copy(faces(0).imageData, imgBytes, imgLen)
-
-
-                            ' 바이트 배열 -> Base64 문자열 변환
-                            Dim base64String As String = Convert.ToBase64String(imgBytes)
-
-                            ' 디버그 출력 (출력창에서 확인 가능)
-                            Debug.WriteLine("=== [Base64 Image Start] ===")
-                            Debug.WriteLine(base64String)
-                            Debug.WriteLine("=== [Base64 Image End] ===")
-
-                            ' Base64 문자열을 텍스트 파일로 저장
-                            System.IO.File.WriteAllText(System.IO.Path.Combine(Application.StartupPath, "FaceBase64.txt"), base64String)
-
-
-                            ' 파일로 저장
-                            Dim fileName As String = $"Capture_{newUserId}_{DateTime.Now:yyyyMMddHHmmss}.jpg"
-                            Dim savePath As String = System.IO.Path.Combine(Application.StartupPath, fileName)
-
-                            System.IO.File.WriteAllBytes(savePath, imgBytes)
-                            Debug.WriteLine($"[이미지 저장] {savePath}")
-                        End If
-                    Catch ex As Exception
-                        Debug.WriteLine("이미지 저장 중 오류: " & ex.Message)
-                    End Try
-
-
-                    userBlob.user.numFaces = 1  ' 얼굴 1개 등록
-                    Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
-                    ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
-                    Marshal.StructureToPtr(faces(0), ptrFaceBuf, False)
-                    userBlob.faceExObjs = ptrFaceBuf
-                Else
-                    MessageBox.Show("스캔 실패: " & resultScan.ToString)
-                    Return
-                End If
-
-            ElseIf isLegacyFaceSupported Then
-                MessageBox.Show("[구형장비 안면등록] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
-
-                Dim faces(0) As BS2Face
-                Dim resultScan As BS2ErrorCode = BS2_ScanFace(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
-
-                If resultScan = BS2ErrorCode.BS_SDK_SUCCESS Then
-                    userBlob.user.numFaces = 1
-                    Dim sizeOfFace = Marshal.SizeOf(GetType(BS2Face))
-                    ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFace)
-                    Marshal.StructureToPtr(faces(0), ptrFaceBuf, False)
-                    userBlob.faceObjs = ptrFaceBuf
-                Else
-                    MessageBox.Show("스캔 실패: " & resultScan.ToString)
-                    Return
-                End If
-            End If
-        End If
-
-        ' 회원 이름
-        If Convert.ToBoolean(deviceInfo.userNameSupported) Then
-            Dim userName = txtMemNm.Text.Trim
-            Dim nameBytes = System.Text.Encoding.UTF8.GetBytes(userName)
-            Array.Copy(nameBytes, userBlob.name, Math.Min(nameBytes.Length, userBlob.name.Length))
-        End If
-
-        ' 장비에 전송
         Try
+
+            ' RF 카드 등록 체크 
+            If chkEnrollCard.Checked Then
+                MessageBox.Show("장치 리더기에 등록할 카드를 태그해주세요.")
+                Dim scannedCard As New BS2Card()
+                Dim cardResult As BS2ErrorCode = CType(BS2_ScanCard(sdkContext, connectedDeviceId, scannedCard, Nothing), BS2ErrorCode)
+
+                If cardResult = BS2ErrorCode.BS_SDK_SUCCESS Then
+                    Dim sizeOfCard = Marshal.SizeOf(GetType(BS2Card))
+                    ptrCardBuf = Marshal.AllocHGlobal(sizeOfCard)
+                    Marshal.StructureToPtr(scannedCard, ptrCardBuf, False)
+
+                    userBlob.cardObjs = ptrCardBuf
+                    userBlob.user.numCards = 1 ' 카드 개수 설정
+                Else
+                    MessageBox.Show($"카드 스캔 실패: {cardResult}")
+                    Return ' 카드 스캔 실패
+                End If
+            End If
+
+            ' 안면 등록 체크
+            If chkEnrollFace.Checked Then
+                ' JPG 파일을 가지고 안면등록하기
+                ' 안면 지원 여부 확인
+                ' 최신장비의 Visual Face (FaceEx) 지원 여부 : 바이오 스테이션 시리즈
+                Dim isFaceExSupported = (cap.systemSupported And BS2CapabilitySystemSupport.SYSTEM_SUPPORT_FACEEX) > 0
+                ' 구형장비의 Legacy Face 지원 여부 : 페이스 스테이션 등
+                Dim isLegacyFaceSupported = Convert.ToBoolean(deviceInfo.faceSupported)
+
+                If rbLoadImage.Checked Then
+
+                    Dim imagePath = txtImagePath.Text.Trim
+                    If String.IsNullOrEmpty(imagePath) OrElse Not File.Exists(imagePath) Then
+                        MessageBox.Show("유효한 이미지 파일 경로를 입력해주세요.")
+                        Return
+                    End If
+
+                    If isFaceExSupported Then
+                        Dim extractedTemplate As New BS2TemplateEx
+                        Dim warpedImageBytes As Byte() = Nothing ' 정규화된 이미지를 받을 변수
+
+                        ' 새로 만든 함수 호출
+                        If GetFaceDataFromImage(sdkContext, connectedDeviceId, imagePath, extractedTemplate, warpedImageBytes) Then
+                            userBlob.user.numFaces = 1
+
+                            ' 표준 구조체
+                            Dim faceExWarped As New BS2FaceExWarped
+                            faceExWarped.faceIndex = 0
+                            faceExWarped.numOfTemplate = 1
+
+                            ' 재부팅 방지를 위해 Flag=1 (WARPED) 유지
+                            faceExWarped.flag = 1  ' 0으로 하면 장비가 갑자기 재부팅됨..
+                            faceExWarped.reserved = 0
+
+                            ' 배열 초기화 (이거 안 하면 에러 뜸)
+                            faceExWarped.unused = New Byte(5) {}
+
+                            ' 이미지 데이터 복사
+                            faceExWarped.imageLen = CUInt(warpedImageBytes.Length)
+                            faceExWarped.imageData = New Byte(BS2_MAX_WARPED_IMAGE_LENGTH - 1) {}
+                            Array.Copy(warpedImageBytes, faceExWarped.imageData, warpedImageBytes.Length)
+
+                            ' IR 데이터 초기화
+                            faceExWarped.irImageLen = 0
+                            faceExWarped.irImageData = New Byte(BS2_MAX_WARPED_IR_IMAGE_LENGTH - 1) {}
+
+                            ' 템플릿 배열 초기화 및 할당
+                            faceExWarped.templateEx = New BS2TemplateEx(BS2_MAX_TEMPLATES_PER_FACE_EX - 1) {}
+                            faceExWarped.templateEx(0) = extractedTemplate
+                            For i = 1 To BS2_MAX_TEMPLATES_PER_FACE_EX - 1
+                                faceExWarped.templateEx(i) = New BS2TemplateEx
+                                faceExWarped.templateEx(i).data = New Byte(BS2_FACE_EX_TEMPLATE_SIZE - 1) {}
+                                faceExWarped.templateEx(i).reserved = New Byte(2) {}
+                            Next
+
+                            ' 메모리 할당 및 연결
+                            Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
+                            ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
+
+                            ' 구조체를 포인터로 변환 (여기서 잘못꼬이면 장비가 재부팅함.....ㅠㅠ)
+                            Marshal.StructureToPtr(faceExWarped, ptrFaceBuf, False)
+                            userBlob.faceExObjs = ptrFaceBuf
+                        Else
+                            Return
+                        End If
+                    Else
+                        MessageBox.Show("이 장치는 이미지 파일 등록(Visual Face)을 지원하지 않습니다.")
+                        Return
+                    End If
+
+                    ' 장비에서 촬영후 안면등록 (비주얼 페이스 기능 활용)
+                ElseIf rbScanDevice.Checked Then
+
+                    If isFaceExSupported Then
+                        MessageBox.Show("[신형장비 안면등록] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
+
+                        Dim faces(0) As BS2FaceExWarped
+                        Dim resultScan As BS2ErrorCode = BS2_ScanFaceEx(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
+
+                        If resultScan = BS2ErrorCode.BS_SDK_SUCCESS Then
+
+                            ' 스캔된 얼굴 이미지를 JPG 파일로 저장
+                            Try
+                                Dim imgLen As Integer = CInt(faces(0).imageLen)
+                                If imgLen > 0 Then
+                                    Dim imgBytes(imgLen - 1) As Byte
+                                    Array.Copy(faces(0).imageData, imgBytes, imgLen)
+
+                                    ' 바이트 배열 -> Base64 문자열 변환
+                                    Dim base64String As String = Convert.ToBase64String(imgBytes)
+
+                                    ' 디버그 출력 (출력창에서 확인 가능)
+                                    Debug.WriteLine("=== [Base64 Image Start] ===")
+                                    Debug.WriteLine(base64String)
+                                    Debug.WriteLine("=== [Base64 Image End] ===")
+
+                                    ' Base64 문자열을 텍스트 파일로 저장
+                                    System.IO.File.WriteAllText(System.IO.Path.Combine(Application.StartupPath, "FaceBase64.txt"), base64String)
+
+
+                                    ' 파일로 저장
+                                    Dim fileName As String = $"Capture_{newUserId}_{DateTime.Now:yyyyMMddHHmmss}.jpg"
+                                    Dim savePath As String = System.IO.Path.Combine(Application.StartupPath, fileName)
+
+                                    System.IO.File.WriteAllBytes(savePath, imgBytes)
+                                    Debug.WriteLine($"[이미지 저장] {savePath}")
+                                End If
+                            Catch ex As Exception
+                                Debug.WriteLine("이미지 저장 중 오류: " & ex.Message)
+                            End Try
+
+
+                            userBlob.user.numFaces = 1  ' 얼굴 1개 등록
+                            Dim sizeOfFaceEx = Marshal.SizeOf(GetType(BS2FaceExWarped))
+                            ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFaceEx)
+                            Marshal.StructureToPtr(faces(0), ptrFaceBuf, False)
+                            userBlob.faceExObjs = ptrFaceBuf
+                        Else
+                            MessageBox.Show("스캔 실패: " & resultScan.ToString)
+                            Return
+                        End If
+
+                    ElseIf isLegacyFaceSupported Then
+                        MessageBox.Show("[구형장비 안면등록] 장치 화면을 통해 안면 등록을 해주시기 바랍니다.")
+
+                        Dim faces(0) As BS2Face
+                        Dim resultScan As BS2ErrorCode = BS2_ScanFace(sdkContext, connectedDeviceId, faces, BS2FaceEnrollThreshold.THRESHOLD_DEFAULT, Nothing)
+
+                        If resultScan = BS2ErrorCode.BS_SDK_SUCCESS Then
+                            userBlob.user.numFaces = 1
+                            Dim sizeOfFace = Marshal.SizeOf(GetType(BS2Face))
+                            ptrFaceBuf = Marshal.AllocHGlobal(sizeOfFace)
+                            Marshal.StructureToPtr(faces(0), ptrFaceBuf, False)
+                            userBlob.faceObjs = ptrFaceBuf
+                        Else
+                            MessageBox.Show("스캔 실패: " & resultScan.ToString)
+                            Return
+                        End If
+                    End If
+                End If
+
+            End If
+
+
+            ' 회원 이름
+            If Convert.ToBoolean(deviceInfo.userNameSupported) Then
+                Dim userName = txtMemNm.Text.Trim
+                Dim nameBytes = System.Text.Encoding.UTF8.GetBytes(userName)
+                Array.Copy(nameBytes, userBlob.name, Math.Min(nameBytes.Length, userBlob.name.Length))
+            End If
+
+            ' 장비에 전송
             Dim userList = {userBlob}
             Dim result As BS2ErrorCode = BS2_EnrollUserFaceEx(sdkContext, connectedDeviceId, userList, 1, 1)
 
             If result = BS2ErrorCode.BS_SDK_SUCCESS Then
-                MessageBox.Show($"사용자({newUserId}) 등록 성공!")
+                Dim msg = If(chkEnrollFace.Checked And chkEnrollCard.Checked, "안면+카드", If(chkEnrollFace.Checked, "안면", "카드"))
+                MessageBox.Show($"사용자({newUserId}) {msg} 등록 성공!")
             Else
                 MessageBox.Show($"등록 전송 실패. 오류 코드: {result}")
             End If
+
         Finally
+            If ptrCardBuf <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrCardBuf)
             If ptrFaceBuf <> IntPtr.Zero Then Marshal.FreeHGlobal(ptrFaceBuf)
         End Try
 
@@ -1254,24 +1292,23 @@ Public Class Form1
                       Dim eventName As String = CType(eventCode, BS2EventCodeEnum).ToString()
                       txtRealTimeLog.AppendText($"[{curTime}] ::: ID:{userId} / {eventName} (0x{eventCode:X4})" & vbCrLf)
 
-                      'Dim isFaceSuccess As Boolean = (eventCode = BS2EventCodeEnum.IDENTIFY_SUCCESS_FACE)
-                      '' 장비에서 얼굴 인증 성공 이벤트인 경우에만 문 열기 시도
-                      'If isFaceSuccess Then
+                      Dim isFaceSuccess As Boolean = (eventCode = BS2EventCodeEnum.IDENTIFY_SUCCESS_FACE)
+                      ' 장비에서 얼굴 인증 성공 이벤트인 경우에만 문 열기 시도
+                      If isFaceSuccess Then
 
-                      '    If userId = "1234" Then
-                      '        txtRealTimeLog.AppendText(">> [문을 연다] 얼굴 인증 성공 & ID 1234 확인됨!" & vbCrLf)
+                          If userId = "1234" Then
+                              txtRealTimeLog.AppendText(">> [문을 연다] 얼굴 인증 성공 & ID 1234 확인됨!" & vbCrLf)
 
-                      '        ' 실시간 로그처리에서 디비조회후 도어제어를 하지 않는다. 
-
-                      '        'UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)  -- 릴레이 접점 신호 안남....
-                      '        'OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..  -- 릴레이 접점 신호 안남....
-                      '        'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기  -- 릴레이 접점 신호 안남....
-                      '        'TestBuzzer_HardCoded(deviceId)  ' 테스트용으로 부저음 울리기 (하드코딩 버전))  -- 릴레이 접점 신호 안남....
-                      '        'TestLED(deviceId)     ' 테스트용으로 LED 점멸시키기)  -- 릴레이 접점 신호 안남....
-                      '    Else
-                      '        txtRealTimeLog.AppendText($">> [문을 열지않음] (ID: {userId})" & vbCrLf)
-                      '    End If
-                      'End If
+                              ' 실시간 로그처리에서 디비조회후 도어제어를 하지 않는다. 
+                              'UnlockDoor(deviceId, 1)  ' 장비에 연결된 릴레이 번호를 아는 경우 이렇게 명령하고..(1번 릴레이를 열어라..)  -- 릴레이 접점 신호 안남....
+                              'OpenRelay(deviceId, 0)  ' 장비에 연결된 릴레이 번호를 모를 경우 그냥 첫 번째 릴레이를 작동시켜라..  -- 릴레이 접점 신호 안남....
+                              'TestBuzzer(deviceId)  ' 테스트용으로 부저음 울리기  -- 릴레이 접점 신호 안남....
+                              'TestBuzzer_HardCoded(deviceId)  ' 테스트용으로 부저음 울리기 (하드코딩 버전))  -- 릴레이 접점 신호 안남....
+                              'TestLED(deviceId)     ' 테스트용으로 LED 점멸시키기)  -- 릴레이 접점 신호 안남....
+                          Else
+                              txtRealTimeLog.AppendText($">> [문을 열지않음] (ID: {userId})" & vbCrLf)
+                          End If
+                      End If
                   End Sub)
     End Sub
     ' 도어 ID를 지정하여 문을 여는 함수
@@ -1925,7 +1962,7 @@ Public Class Form1
         txtRealTimeLog.AppendText(sbLog.ToString() & vbCrLf)
 
     End Sub
-    ' [기능 추가] 초기화면 스킵용 기본 관리자 등록 (ID: 1, PW: 1234)
+    ' 초기화면 스킵용 기본 관리자 등록 (ID: 1, PW: 1234)
     Private Sub RegisterFactoryAdmin()
         ' 1. 사용자 구조체 생성
         Dim userBlob As New BS2UserBlob()
@@ -2030,15 +2067,15 @@ Public Class Form1
 
     Private Sub btnSettingCopy_Click(sender As Object, e As EventArgs) Handles btnSettingCopy.Click
 
-        ' 1. 복사할 원본 장비 IP 입력 받기
+        ' 복사할 원본 장비 IP 입력 받기
         Dim sourceIp As String = InputBox("설정을 복사해올 원본 장비의 IP 주소를 입력하세요:", "장비 설정 복사", "192.168.0.100")
 
         If String.IsNullOrEmpty(sourceIp) Then Return ' 취소 시 종료
 
-        ' 2. 설정 복사 함수 실행 (포트는 기본 51211)
+        ' 설정 복사 함수 실행 (포트는 기본 51211)
         CloneDeviceSettings(sourceIp, 51211)
     End Sub
-    ' [기능 추가] 다른 IP의 장비 설정을 가져와서 현재 장비에 똑같이 적용하기
+    ' 다른 IP의 장비 설정을 가져와서 현재 장비에 똑같이 적용하기
     Private Sub CloneDeviceSettings(sourceIp As String, sourcePort As UShort)
 
         ' 1. 대상 장비(현재 연결된 장비) 확인

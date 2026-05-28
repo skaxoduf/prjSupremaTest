@@ -63,6 +63,8 @@ Partial Class Form1
         btnFactoryReset = New Button()
         btnCustomReset = New Button()
         btnSettingCopy = New Button()
+        chkEnrollFace = New CheckBox()
+        chkEnrollCard = New CheckBox()
         SuspendLayout()
         ' 
         ' btnDLLLoad
@@ -439,11 +441,33 @@ Partial Class Form1
         btnSettingCopy.Text = "장치 세팅 복사"
         btnSettingCopy.UseVisualStyleBackColor = True
         ' 
+        ' chkEnrollFace
+        ' 
+        chkEnrollFace.AutoSize = True
+        chkEnrollFace.Location = New Point(24, 285)
+        chkEnrollFace.Name = "chkEnrollFace"
+        chkEnrollFace.Size = New Size(78, 19)
+        chkEnrollFace.TabIndex = 8
+        chkEnrollFace.Text = "안면 등록"
+        chkEnrollFace.UseVisualStyleBackColor = True
+        ' 
+        ' chkEnrollCard
+        ' 
+        chkEnrollCard.AutoSize = True
+        chkEnrollCard.Location = New Point(108, 285)
+        chkEnrollCard.Name = "chkEnrollCard"
+        chkEnrollCard.Size = New Size(95, 19)
+        chkEnrollCard.TabIndex = 8
+        chkEnrollCard.Text = "RF 카드 등록"
+        chkEnrollCard.UseVisualStyleBackColor = True
+        ' 
         ' Form1
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
         ClientSize = New Size(1316, 795)
+        Controls.Add(chkEnrollCard)
+        Controls.Add(chkEnrollFace)
         Controls.Add(btnGetDoorList)
         Controls.Add(btnDisableImageLog)
         Controls.Add(btnSettingCopy)
@@ -533,5 +557,7 @@ Partial Class Form1
     Friend WithEvents btnFactoryReset As Button
     Friend WithEvents btnCustomReset As Button
     Friend WithEvents btnSettingCopy As Button
+    Friend WithEvents chkEnrollFace As CheckBox
+    Friend WithEvents chkEnrollCard As CheckBox
 
 End Class
